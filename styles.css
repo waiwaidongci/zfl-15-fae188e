@@ -380,6 +380,50 @@ dd {
   font-size: 14px;
 }
 
+.tile-info h2 {
+  margin-bottom: 10px;
+}
+
+.tile-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-style: italic;
+}
+
+.tile-info dl {
+  margin-top: 10px;
+}
+
+.tile-info .status-yes {
+  color: var(--moss);
+}
+
+.tile-info .status-no {
+  color: var(--muted);
+}
+
+.tile-info .status-can {
+  color: var(--moss);
+  font-weight: 900;
+}
+
+.tile-info .status-cannot {
+  color: #b04b4b;
+  font-weight: 900;
+}
+
+.cell.selected {
+  outline: 3px solid var(--moss);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.cell.hovered {
+  border-color: var(--moss);
+  transform: translateY(-1px);
+}
+
 @media (max-width: 980px) {
   .game {
     grid-template-columns: 1fr;

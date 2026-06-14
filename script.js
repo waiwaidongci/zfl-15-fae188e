@@ -41,6 +41,8 @@ const cost = { loam: 3, wet: 2, dry: 6 };
 let levelIndex = 0;
 let state;
 let history = [];
+let selectedCell = null;
+let hoveredCell = null;
 
 const mapEl = document.querySelector("#map");
 const logEl = document.querySelector("#log");
@@ -167,7 +169,73 @@ function tileClass(cell) {
   if (cell.microbe && !cell.competed) classes.push("microbe");
   if (cell.mycelium) classes.push("mycelium");
   if (canGrow(cell)) classes.push("frontier");
+  if (selectedCell && selectedCell.x === cell.x && selectedCell.y === cell.y) classes.push("selected");
+  if (hoveredCell && hoveredCell.x === cell.x && hoveredCell.y === cell.y) classes.push("hovered");
   return classes.join(" ");
+}
+
+function showTileInfo(cell) {
+  const hintEl = document.querySelector(".tile-hint");
+  const detailsEl = document.querySelector("#tileDetails");
+
+  if (!cell) {
+    hintEl.hidden = false;
+    detailsEl.hidden = true;
+    return;
+  }
+
+  hintEl.hidden = true;
+  detailsEl.hidden = false;
+
+  const soilNames = { loam: "壤土", wet: "湿土", dry: "干层" };
+  const tileCost = cost[cell.soil] + (cell.microbe && !cell.competed ? 3 : 0);
+  const canGrowTo = canGrow(cell);
+
+  document.querySelector("#tileCoord").textContent = `(${cell.x}, ${cell.y})`;
+  document.querySelector("#tileSoil").textContent = soilNames[cell.soil];
+  document.querySelector("#tileCost").textContent = `${tileCost} 养分`;
+
+  const treeEl = document.querySelector("#tileTree");
+  if (cell.tree) {
+    treeEl.textContent = cell.mycelium ? "有（已连接）" : "有";
+    treeEl.className = "status-yes";
+  } else {
+    treeEl.textContent = "无";
+    treeEl.className = "status-no";
+  }
+
+  const leafEl = document.querySelector("#tileLeaf");
+  if (cell.leaf) {
+    leafEl.textContent = cell.decomposed ? "有（已分解）" : "有";
+    leafEl.className = "status-yes";
+  } else {
+    leafEl.textContent = "无";
+    leafEl.className = "status-no";
+  }
+
+  const microbeEl = document.querySelector("#tileMicrobe");
+  if (cell.microbe) {
+    microbeEl.textContent = cell.competed ? "有（已竞争）" : "有";
+    microbeEl.className = "status-yes";
+  } else {
+    microbeEl.textContent = "无";
+    microbeEl.className = "status-no";
+  }
+
+  const canGrowEl = document.querySelector("#tileCanGrow");
+  if (cell.mycelium) {
+    canGrowEl.textContent = "已占领";
+    canGrowEl.className = "status-yes";
+  } else if (cell.block) {
+    canGrowEl.textContent = "不可通行";
+    canGrowEl.className = "status-cannot";
+  } else if (canGrowTo) {
+    canGrowEl.textContent = state.nutrients >= tileCost ? "可以扩张" : "养分不足";
+    canGrowEl.className = state.nutrients >= tileCost ? "status-can" : "status-cannot";
+  } else {
+    canGrowEl.textContent = "未连接菌丝";
+    canGrowEl.className = "status-cannot";
+  }
 }
 
 function render() {
@@ -191,9 +259,38 @@ function render() {
     button.className = tileClass(cell);
     button.type = "button";
     button.title = `${cell.soil} ${cell.x},${cell.y}`;
-    button.addEventListener("click", () => grow(cell));
+    button.addEventListener("mouseenter", () => {
+      hoveredCell = cell;
+      showTileInfo(cell);
+      render();
+    });
+    button.addEventListener("mouseleave", () => {
+      hoveredCell = null;
+      showTileInfo(selectedCell);
+      render();
+    });
+    button.addEventListener("click", () => {
+      selectedCell = cell;
+      grow(cell);
+    });
     mapEl.appendChild(button);
   });
+
+  if (hoveredCell) {
+    const currentCell = cellAt(hoveredCell.x, hoveredCell.y);
+    if (currentCell) {
+      hoveredCell = currentCell;
+      showTileInfo(currentCell);
+    }
+  } else if (selectedCell) {
+    const currentCell = cellAt(selectedCell.x, selectedCell.y);
+    if (currentCell) {
+      selectedCell = currentCell;
+      showTileInfo(currentCell);
+    }
+  } else {
+    showTileInfo(null);
+  }
 
   logEl.innerHTML = "";
   state.log.forEach((entry) => {
@@ -266,6 +363,8 @@ function toggleGuide() {
 function reset() {
   state = parseLevel(currentLevel());
   history = [];
+  selectedCell = null;
+  hoveredCell = null;
   render();
 }
 
@@ -280,6 +379,10 @@ levelSelectEl.addEventListener("change", (e) => {
 document.querySelector("#undo").addEventListener("click", () => {
   if (!history.length) return;
   state = JSON.parse(history.pop());
+  if (selectedCell) {
+    const currentCell = cellAt(selectedCell.x, selectedCell.y);
+    if (currentCell) selectedCell = currentCell;
+  }
   render();
 });
 
