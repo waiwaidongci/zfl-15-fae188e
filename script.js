@@ -201,6 +201,56 @@ function addLogOnce(text) {
   }
 }
 
+function countLevelStats(level) {
+  let trees = 0;
+  let leaves = 0;
+  let microbes = 0;
+  for (const row of level.tiles) {
+    for (const char of row) {
+      if (char === "t") trees += 1;
+      else if (char === "f") leaves += 1;
+      else if (char === "m") microbes += 1;
+    }
+  }
+  return { trees, leaves, microbes };
+}
+
+function renderGuide() {
+  const guideList = document.querySelector("#guideList");
+  guideList.innerHTML = "";
+  levels.forEach((level, index) => {
+    const stats = countLevelStats(level);
+    const item = document.createElement("div");
+    item.className = "guide-item" + (index === levelIndex ? " active" : "");
+    item.innerHTML = `
+      <h3>${level.name}</h3>
+      <p class="guide-goal">${level.goal}</p>
+      <dl>
+        <div><dt>初始养分</dt><dd>${level.nutrients}</dd></div>
+        <div><dt>树根数量</dt><dd>${stats.trees}</dd></div>
+        <div><dt>落叶数量</dt><dd>${stats.leaves}</dd></div>
+        <div><dt>微生物数量</dt><dd>${stats.microbes}</dd></div>
+      </dl>
+    `;
+    item.addEventListener("click", () => {
+      levelIndex = index;
+      reset();
+      renderGuide();
+    });
+    guideList.appendChild(item);
+  });
+}
+
+function toggleGuide() {
+  const guide = document.querySelector("#guide");
+  if (guide.hidden) {
+    guide.hidden = false;
+    renderGuide();
+  } else {
+    guide.hidden = true;
+  }
+}
+
 function reset() {
   state = parseLevel(currentLevel());
   history = [];
@@ -212,7 +262,9 @@ document.querySelector("#reset").addEventListener("click", reset);
 document.querySelector("#switchLevel").addEventListener("click", () => {
   levelIndex = (levelIndex + 1) % levels.length;
   reset();
+  if (!document.querySelector("#guide").hidden) renderGuide();
 });
+document.querySelector("#toggleGuide").addEventListener("click", toggleGuide);
 document.querySelector("#undo").addEventListener("click", () => {
   if (!history.length) return;
   state = JSON.parse(history.pop());
