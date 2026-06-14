@@ -384,6 +384,16 @@ dd {
   .game {
     grid-template-columns: 1fr;
   }
+
+  .map-wrap {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .map {
+    width: min(92vmin, 100%);
+    height: auto;
+    max-height: none;
+  }
 }
 
 @media (max-width: 620px) {
@@ -396,8 +406,14 @@ dd {
     flex-direction: column;
   }
 
+  .map-wrap {
+    overflow: visible;
+  }
+
   .map {
-    width: 96vw;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
     gap: 3px;
     padding: 10px;
   }
