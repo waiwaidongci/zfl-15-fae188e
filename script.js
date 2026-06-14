@@ -301,13 +301,6 @@ function render() {
     showTileInfo(null);
   }
 
-  logEl.innerHTML = "";
-  state.log.forEach((entry) => {
-    const li = document.createElement("li");
-    li.textContent = entry;
-    logEl.appendChild(li);
-  });
-
   if (treeDone >= winCondition.requiredTrees && leavesDone >= winCondition.requiredLeaves) {
     const treeMet = winCondition.requiredTrees > 0 ? `已连接${treeDone}处树根` : "";
     const leafMet = winCondition.requiredLeaves > 0 ? `已分解${leavesDone}片落叶` : "";
@@ -315,6 +308,13 @@ function render() {
     addLogOnce(`网络稳定，森林进入共生状态。（${parts.join("，")}）`);
   }
   if (state.nutrients < 0) addLogOnce("养分透支，菌丝停止扩张。");
+
+  logEl.innerHTML = "";
+  state.log.forEach((entry) => {
+    const li = document.createElement("li");
+    li.textContent = entry;
+    logEl.appendChild(li);
+  });
 }
 
 function addLogOnce(text) {
