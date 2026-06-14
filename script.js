@@ -4,6 +4,10 @@ const levels = [
     goal: "连接3处树根，分解至少2片落叶。",
     nutrients: 34,
     start: [1, 8],
+    winCondition: {
+      requiredTrees: 3,
+      requiredLeaves: 2
+    },
     tiles: [
       "llllllllll",
       "llldflwmll",
@@ -22,6 +26,10 @@ const levels = [
     goal: "绕过干层连接4处树根。",
     nutrients: 38,
     start: [0, 5],
+    winCondition: {
+      requiredTrees: 4,
+      requiredLeaves: 0
+    },
     tiles: [
       "lllddflltl",
       "lwwldlmlll",
@@ -241,17 +249,17 @@ function showTileInfo(cell) {
 
 function render() {
   const level = currentLevel();
+  const winCondition = level.winCondition;
   levelSelectEl.value = levelIndex;
   document.querySelector("#levelGoal").textContent = level.goal;
   document.querySelector("#nutrients").textContent = state.nutrients;
   document.querySelector("#turn").textContent = state.turn;
 
-  const treeTotal = state.cells.filter((cell) => cell.tree).length;
   const treeDone = state.cells.filter((cell) => cell.tree && cell.mycelium).length;
   const leavesDone = state.cells.filter((cell) => cell.leaf && cell.decomposed).length;
   const length = state.cells.filter((cell) => cell.mycelium).length;
-  document.querySelector("#trees").textContent = `${treeDone}/${treeTotal}`;
-  document.querySelector("#leaves").textContent = leavesDone;
+  document.querySelector("#trees").textContent = `${treeDone}/${winCondition.requiredTrees}`;
+  document.querySelector("#leaves").textContent = `${leavesDone}/${winCondition.requiredLeaves}`;
   document.querySelector("#length").textContent = length;
 
   mapEl.innerHTML = "";
@@ -300,7 +308,12 @@ function render() {
     logEl.appendChild(li);
   });
 
-  if (treeDone === treeTotal && leavesDone >= 2) addLogOnce("网络稳定，森林进入共生状态。");
+  if (treeDone >= winCondition.requiredTrees && leavesDone >= winCondition.requiredLeaves) {
+    const treeMet = winCondition.requiredTrees > 0 ? `已连接${treeDone}处树根` : "";
+    const leafMet = winCondition.requiredLeaves > 0 ? `已分解${leavesDone}片落叶` : "";
+    const parts = [treeMet, leafMet].filter(Boolean);
+    addLogOnce(`网络稳定，森林进入共生状态。（${parts.join("，")}）`);
+  }
   if (state.nutrients < 0) addLogOnce("养分透支，菌丝停止扩张。");
 }
 
