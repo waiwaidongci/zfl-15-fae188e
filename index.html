@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>地下菌丝网络</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="game">
+      <section class="map-wrap">
+        <header class="bar">
+          <div>
+            <p>Subsoil Network</p>
+            <h1>地下菌丝网络</h1>
+          </div>
+          <div class="resource">
+            <span>养分</span>
+            <strong id="nutrients">34</strong>
+          </div>
+        </header>
+
+        <div id="map" class="map" aria-label="菌丝网络地图"></div>
+
+        <div class="legend">
+          <span><i class="loam"></i>壤土</span>
+          <span><i class="wet"></i>湿土</span>
+          <span><i class="dry"></i>干层</span>
+          <span><i class="leaf"></i>落叶</span>
+          <span><i class="tree"></i>树根</span>
+          <span><i class="microbe"></i>微生物</span>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <section>
+          <h2 id="levelName">松林边缘</h2>
+          <p id="levelGoal">连接所有树根，并保持养分不低于0。</p>
+        </section>
+
+        <section class="stats">
+          <dl>
+            <div><dt>回合</dt><dd id="turn">1</dd></div>
+            <div><dt>连接树根</dt><dd id="trees">0/0</dd></div>
+            <div><dt>分解落叶</dt><dd id="leaves">0</dd></div>
+            <div><dt>菌丝长度</dt><dd id="length">1</dd></div>
+          </dl>
+        </section>
+
+        <section class="actions">
+          <button id="nextTurn">回合推进</button>
+          <button id="undo">撤销</button>
+          <button id="switchLevel">换关</button>
+          <button id="reset">重置</button>
+        </section>
+
+        <section class="log">
+          <h2>土壤记录</h2>
+          <ol id="log"></ol>
+        </section>
+      </aside>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
