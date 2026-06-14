@@ -44,6 +44,18 @@ let history = [];
 
 const mapEl = document.querySelector("#map");
 const logEl = document.querySelector("#log");
+const levelSelectEl = document.querySelector("#levelSelect");
+
+function renderLevelOptions() {
+  levelSelectEl.innerHTML = "";
+  levels.forEach((level, index) => {
+    const option = document.createElement("option");
+    option.value = index;
+    option.textContent = level.name;
+    levelSelectEl.appendChild(option);
+  });
+  levelSelectEl.value = levelIndex;
+}
 
 function parseLevel(level) {
   const cells = [];
@@ -160,7 +172,7 @@ function tileClass(cell) {
 
 function render() {
   const level = currentLevel();
-  document.querySelector("#levelName").textContent = level.name;
+  levelSelectEl.value = levelIndex;
   document.querySelector("#levelGoal").textContent = level.goal;
   document.querySelector("#nutrients").textContent = state.nutrients;
   document.querySelector("#turn").textContent = state.turn;
@@ -259,16 +271,17 @@ function reset() {
 
 document.querySelector("#nextTurn").addEventListener("click", nextTurn);
 document.querySelector("#reset").addEventListener("click", reset);
-document.querySelector("#switchLevel").addEventListener("click", () => {
-  levelIndex = (levelIndex + 1) % levels.length;
+document.querySelector("#toggleGuide").addEventListener("click", toggleGuide);
+levelSelectEl.addEventListener("change", (e) => {
+  levelIndex = parseInt(e.target.value, 10);
   reset();
   if (!document.querySelector("#guide").hidden) renderGuide();
 });
-document.querySelector("#toggleGuide").addEventListener("click", toggleGuide);
 document.querySelector("#undo").addEventListener("click", () => {
   if (!history.length) return;
   state = JSON.parse(history.pop());
   render();
 });
 
+renderLevelOptions();
 reset();

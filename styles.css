@@ -227,6 +227,35 @@ h2 {
   padding: 14px;
 }
 
+.level-select-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.level-select {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  margin-bottom: 10px;
+  border: 1px solid #8d846d;
+  border-radius: 6px;
+  color: var(--ink);
+  background: #fff7df;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.level-select:focus {
+  outline: none;
+  border-color: var(--moss);
+  box-shadow: 0 0 0 2px rgba(102, 127, 69, 0.2);
+}
+
 .panel p {
   margin-top: 10px;
   color: var(--muted);
