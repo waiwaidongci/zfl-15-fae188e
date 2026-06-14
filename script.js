@@ -113,11 +113,11 @@ function canGrow(cell) {
 }
 
 function grow(cell) {
-  if (!canGrow(cell)) return;
+  if (!canGrow(cell)) return false;
   const tileCost = cost[cell.soil] + (cell.microbe && !cell.competed ? 3 : 0);
   if (state.nutrients < tileCost) {
     addLog("养分不足，前沿停止扩张。");
-    return;
+    return false;
   }
   saveHistory();
   cell.mycelium = true;
@@ -136,6 +136,7 @@ function grow(cell) {
     addLog(`${cell.soil === "dry" ? "干层" : cell.soil === "wet" ? "湿土" : "壤土"}中新生菌丝。`);
   }
   render();
+  return true;
 }
 
 function addLog(text) {
@@ -271,7 +272,7 @@ function render() {
     });
     button.addEventListener("click", () => {
       selectedCell = cell;
-      grow(cell);
+      if (!grow(cell)) render();
     });
     mapEl.appendChild(button);
   });
