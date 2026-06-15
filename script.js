@@ -51,6 +51,8 @@ let state;
 let history = [];
 let selectedCell = null;
 let hoveredCell = null;
+let previewCell = null;
+let lastPreview = null;
 
 const mapEl = document.querySelector("#map");
 const logEl = document.querySelector("#log");
@@ -147,6 +149,66 @@ function grow(cell) {
   return true;
 }
 
+function simulateGrow(cell) {
+  const result = {
+    canGrow: false,
+    reason: "",
+    cost: 0,
+    nutrientDelta: 0,
+    effects: [],
+    warnings: []
+  };
+
+  if (cell.block) {
+    result.reason = "不可通行";
+    result.warnings.push("此格子无法通行");
+    return result;
+  }
+
+  if (cell.mycelium) {
+    result.reason = "已占领";
+    result.warnings.push("菌丝已占领此格");
+    return result;
+  }
+
+  if (!neighbors(cell).some((item) => item.mycelium)) {
+    result.reason = "未连接菌丝";
+    result.warnings.push("需与已有菌丝相邻");
+    return result;
+  }
+
+  result.canGrow = true;
+  result.cost = cost[cell.soil] + (cell.microbe && !cell.competed ? 3 : 0);
+  result.nutrientDelta = -result.cost;
+
+  if (cell.leaf && !cell.decomposed) {
+    result.effects.push({ type: "leaf", label: "落叶分解", value: 8 });
+    result.nutrientDelta += 8;
+  } else if (cell.leaf && cell.decomposed) {
+    result.warnings.push("落叶已分解，无法再次回收");
+  }
+
+  if (cell.tree) {
+    const treeValue = cell.soil === "wet" ? 5 : 3;
+    result.effects.push({ type: "tree", label: "树根回馈", value: treeValue });
+    result.nutrientDelta += treeValue;
+  }
+
+  if (cell.microbe && !cell.competed) {
+    result.effects.push({ type: "microbe", label: "微生物额外消耗", value: 3 });
+    result.warnings.push("微生物竞争将额外消耗3养分");
+  } else if (cell.microbe && cell.competed) {
+    result.warnings.push("微生物已竞争过");
+  }
+
+  if (state.nutrients < result.cost) {
+    result.reason = "养分不足";
+    result.warnings.push(`需要${result.cost}养分，当前仅${state.nutrients}`);
+  }
+
+  return result;
+}
+
 function addLog(text) {
   state.log.unshift(text);
   state.log = state.log.slice(0, 6);
@@ -180,6 +242,25 @@ function tileClass(cell) {
   if (canGrow(cell)) classes.push("frontier");
   if (selectedCell && selectedCell.x === cell.x && selectedCell.y === cell.y) classes.push("selected");
   if (hoveredCell && hoveredCell.x === cell.x && hoveredCell.y === cell.y) classes.push("hovered");
+  if (previewCell && previewCell.x === cell.x && previewCell.y === cell.y) {
+    classes.push("previewing");
+    if (lastPreview) {
+      if (!lastPreview.canGrow) {
+        classes.push("preview-blocked");
+      } else if (lastPreview.nutrientDelta >= 0) {
+        classes.push("preview-positive");
+      } else {
+        const after = state.nutrients + lastPreview.nutrientDelta;
+        if (after < 0) {
+          classes.push("preview-negative-danger");
+        } else if (state.nutrients < lastPreview.cost) {
+          classes.push("preview-negative-low");
+        } else {
+          classes.push("preview-negative");
+        }
+      }
+    }
+  }
   return classes.join(" ");
 }
 
@@ -247,12 +328,107 @@ function showTileInfo(cell) {
   }
 }
 
+function showGrowPreview(cell) {
+  const previewEl = document.querySelector("#growPreview");
+  const previewEffects = document.querySelector("#previewEffects");
+  const previewWarnings = document.querySelector("#previewWarnings");
+  const deltaEl = document.querySelector("#previewDelta");
+  const afterEl = document.querySelector("#previewAfter");
+
+  if (!cell) {
+    previewEl.hidden = true;
+    previewCell = null;
+    lastPreview = null;
+    return;
+  }
+
+  const result = simulateGrow(cell);
+  previewCell = cell;
+  lastPreview = result;
+
+  previewEl.hidden = false;
+
+  previewEffects.innerHTML = "";
+  previewWarnings.innerHTML = "";
+
+  if (result.canGrow) {
+    const hasEnoughNutrients = state.nutrients >= result.cost;
+    const baseSoilCost = cost[cell.soil];
+    const hasMicrobeCost = cell.microbe && !cell.competed;
+
+    deltaEl.textContent = (result.nutrientDelta >= 0 ? "+" : "") + result.nutrientDelta;
+    deltaEl.className = result.nutrientDelta >= 0 ? "delta-positive" : "delta-negative";
+
+    const afterValue = state.nutrients + result.nutrientDelta;
+    afterEl.textContent = afterValue;
+    afterEl.className = afterValue >= 0 ? (hasEnoughNutrients ? "after-ok" : "after-low") : "after-negative";
+
+    const costLi = document.createElement("li");
+    costLi.className = "effect-cost";
+    costLi.innerHTML = `<span class="effect-label">土壤消耗${hasMicrobeCost ? "（基础）" : ""}</span><span class="effect-value">-${baseSoilCost}</span>`;
+    previewEffects.appendChild(costLi);
+
+    result.effects.forEach((effect) => {
+      const li = document.createElement("li");
+      li.className = `effect-${effect.type}`;
+      const sign = effect.type === "microbe" ? "-" : "+";
+      li.innerHTML = `<span class="effect-label">${effect.label}</span><span class="effect-value">${sign}${effect.value}</span>`;
+      previewEffects.appendChild(li);
+    });
+
+    const summary = document.createElement("li");
+    summary.className = `effect-summary ${result.nutrientDelta >= 0 ? "summary-positive" : "summary-negative"}`;
+    summary.innerHTML = `<span class="effect-label">净变化</span><span class="effect-value">${result.nutrientDelta >= 0 ? "+" : ""}${result.nutrientDelta}</span>`;
+    previewEffects.appendChild(summary);
+
+    if (!hasEnoughNutrients) {
+      const warn = document.createElement("li");
+      warn.className = "warning-blocker";
+      warn.textContent = `养分不足：需要 ${result.cost}，当前 ${state.nutrients}`;
+      previewWarnings.appendChild(warn);
+    }
+  } else {
+    deltaEl.textContent = "—";
+    deltaEl.className = "delta-na";
+    afterEl.textContent = "—";
+    afterEl.className = "after-na";
+
+    const blocker = document.createElement("li");
+    blocker.className = "warning-blocker";
+    blocker.textContent = `无法扩张：${result.reason}`;
+    previewWarnings.appendChild(blocker);
+  }
+
+  result.warnings.forEach((warning) => {
+    const li = document.createElement("li");
+    li.className = "warning-item";
+    li.textContent = warning;
+    previewWarnings.appendChild(li);
+  });
+}
+
+function hideGrowPreview() {
+  const previewEl = document.querySelector("#growPreview");
+  previewEl.hidden = true;
+  previewCell = null;
+  lastPreview = null;
+}
+
 function render() {
   const level = currentLevel();
   const winCondition = level.winCondition;
   levelSelectEl.value = levelIndex;
   document.querySelector("#levelGoal").textContent = level.goal;
-  document.querySelector("#nutrients").textContent = state.nutrients;
+
+  const nutrientEl = document.querySelector("#nutrients");
+  if (previewCell && lastPreview && lastPreview.canGrow) {
+    const previewVal = state.nutrients + lastPreview.nutrientDelta;
+    const delta = lastPreview.nutrientDelta;
+    nutrientEl.innerHTML = `<span class="nutrient-base">${state.nutrients}</span> <span class="nutrient-preview-arrow">→</span> <span class="nutrient-preview ${delta >= 0 ? "nutrient-up" : "nutrient-down"}">${previewVal}</span> <span class="nutrient-delta ${delta >= 0 ? "delta-up" : "delta-down"}">(${delta >= 0 ? "+" : ""}${delta})</span>`;
+  } else {
+    nutrientEl.textContent = state.nutrients;
+    nutrientEl.className = "";
+  }
   document.querySelector("#turn").textContent = state.turn;
 
   const treeDone = state.cells.filter((cell) => cell.tree && cell.mycelium).length;
@@ -270,16 +446,52 @@ function render() {
     button.title = `${cell.soil} ${cell.x},${cell.y}`;
     button.addEventListener("mouseenter", () => {
       hoveredCell = cell;
+      previewCell = cell;
       showTileInfo(cell);
+      showGrowPreview(cell);
       render();
     });
     button.addEventListener("mouseleave", () => {
       hoveredCell = null;
+      previewCell = null;
+      hideGrowPreview();
+      showTileInfo(selectedCell);
+      render();
+    });
+    button.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      if (previewCell && previewCell.x === cell.x && previewCell.y === cell.y) {
+        selectedCell = cell;
+        hideGrowPreview();
+        previewCell = null;
+        if (!grow(cell)) render();
+      } else {
+        hoveredCell = cell;
+        previewCell = cell;
+        selectedCell = cell;
+        showTileInfo(cell);
+        showGrowPreview(cell);
+        render();
+      }
+    }, { passive: false });
+    button.addEventListener("focus", () => {
+      hoveredCell = cell;
+      previewCell = cell;
+      showTileInfo(cell);
+      showGrowPreview(cell);
+      render();
+    });
+    button.addEventListener("blur", () => {
+      hoveredCell = null;
+      previewCell = null;
+      hideGrowPreview();
       showTileInfo(selectedCell);
       render();
     });
     button.addEventListener("click", () => {
       selectedCell = cell;
+      hideGrowPreview();
+      previewCell = null;
       if (!grow(cell)) render();
     });
     mapEl.appendChild(button);
@@ -289,7 +501,9 @@ function render() {
     const currentCell = cellAt(hoveredCell.x, hoveredCell.y);
     if (currentCell) {
       hoveredCell = currentCell;
+      previewCell = currentCell;
       showTileInfo(currentCell);
+      showGrowPreview(currentCell);
     }
   } else if (selectedCell) {
     const currentCell = cellAt(selectedCell.x, selectedCell.y);
@@ -299,6 +513,7 @@ function render() {
     }
   } else {
     showTileInfo(null);
+    hideGrowPreview();
   }
 
   if (treeDone >= winCondition.requiredTrees && leavesDone >= winCondition.requiredLeaves) {
@@ -379,6 +594,9 @@ function reset() {
   history = [];
   selectedCell = null;
   hoveredCell = null;
+  previewCell = null;
+  lastPreview = null;
+  hideGrowPreview();
   render();
 }
 
