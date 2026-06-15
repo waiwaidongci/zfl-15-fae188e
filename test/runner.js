@@ -1,18 +1,19 @@
-const { Game, assert } = require('./setup');
+import { levels, cost } from '../src/data/levels.js';
+import { parseLevel, cellAt, neighbors, canGrow, saveHistory } from '../src/logic/state.js';
+import { simulateGrow, grow, nextTurn, checkWin } from '../src/logic/actions.js';
+import { mulberry32Step, seedForLevel } from '../src/logic/rng.js';
+import assert from 'node:assert/strict';
 
 const results = {
   total: 0,
   passed: 0,
   failed: 0,
-  tests: []
+  tests: [],
 };
 
 function test(name, fn) {
   results.total += 1;
   try {
-    Game.levelIndex = 0;
-    Game.state = null;
-    Game.history = [];
     fn();
     results.passed += 1;
     results.tests.push({ name, status: 'passed' });
@@ -31,86 +32,72 @@ function suite(name, fn) {
 }
 
 function loadLevel(levelIndex) {
-  Game.levelIndex = levelIndex;
-  Game.state = Game.parseLevel(Game.currentLevel());
-  Game.history = [];
-  return Game.state;
+  const level = { ...levels[levelIndex], _index: levelIndex };
+  const state = parseLevel(level, false);
+  return { level, state, history: [] };
 }
 
-function growAt(x, y) {
-  const cell = Game.cellAt(x, y);
-  return Game.grow(cell);
+function simulateAt(ctx, x, y) {
+  const cell = cellAt(ctx.state, x, y);
+  return simulateGrow(ctx.state, cell);
 }
 
-function simulateAt(x, y) {
-  const cell = Game.cellAt(x, y);
-  return Game.simulateGrow(cell);
-}
-
-function canGrowAt(x, y) {
-  const cell = Game.cellAt(x, y);
-  return Game.canGrow(cell);
-}
-
-function checkWin() {
-  const level = Game.currentLevel();
-  const winCondition = level.winCondition;
-  const treeDone = Game.state.cells.filter((c) => c.tree && c.mycelium).length;
-  const leavesDone = Game.state.cells.filter((c) => c.leaf && c.decomposed).length;
-  return treeDone >= winCondition.requiredTrees && leavesDone >= winCondition.requiredLeaves;
+function canGrowAt(ctx, x, y) {
+  const cell = cellAt(ctx.state, x, y);
+  return canGrow(ctx.state, cell);
 }
 
 suite('关卡解析', () => {
   test('解析关卡后初始化回合为1', () => {
-    loadLevel(0);
-    assert.strictEqual(Game.state.turn, 1);
+    const { state } = loadLevel(0);
+    assert.strictEqual(state.turn, 1);
   });
 
   test('解析关卡后初始养分正确', () => {
-    loadLevel(0);
-    assert.strictEqual(Game.state.nutrients, 34);
-    loadLevel(1);
-    assert.strictEqual(Game.state.nutrients, 38);
+    let ctx = loadLevel(0);
+    assert.strictEqual(ctx.state.nutrients, 34);
+    ctx = loadLevel(1);
+    assert.strictEqual(ctx.state.nutrients, 38);
   });
 
   test('起始位置有菌丝', () => {
-    loadLevel(0);
-    const start = Game.currentLevel().start;
-    const startCell = Game.cellAt(start[0], start[1]);
+    const ctx = loadLevel(0);
+    const start = ctx.level.start;
+    const startCell = cellAt(ctx.state, start[0], start[1]);
     assert.ok(startCell.mycelium);
   });
 
   test('正确解析土壤类型', () => {
-    loadLevel(0);
-    const wetCell = Game.cellAt(6, 1);
+    const ctx = loadLevel(0);
+    const wetCell = cellAt(ctx.state, 6, 1);
     assert.strictEqual(wetCell.soil, 'wet');
-    const dryCell = Game.cellAt(3, 1);
+    const dryCell = cellAt(ctx.state, 3, 1);
     assert.strictEqual(dryCell.soil, 'dry');
-    const loamCell = Game.cellAt(0, 0);
+    const loamCell = cellAt(ctx.state, 0, 0);
     assert.strictEqual(loamCell.soil, 'loam');
   });
 
   test('正确解析树根标记', () => {
-    loadLevel(0);
-    const treeCell = Game.cellAt(8, 3);
+    const ctx = loadLevel(0);
+    const treeCell = cellAt(ctx.state, 8, 3);
     assert.ok(treeCell.tree);
   });
 
   test('正确解析落叶标记', () => {
-    loadLevel(0);
-    const leafCell = Game.cellAt(4, 1);
+    const ctx = loadLevel(0);
+    const leafCell = cellAt(ctx.state, 4, 1);
     assert.ok(leafCell.leaf);
   });
 
   test('正确解析微生物标记', () => {
-    loadLevel(0);
-    const microbeCell = Game.cellAt(4, 3);
+    const ctx = loadLevel(0);
+    const microbeCell = cellAt(ctx.state, 4, 3);
     assert.ok(microbeCell.microbe);
   });
 
   test('正确解析障碍标记', () => {
-    loadLevel(0);
-    const tiles = Game.currentLevel().tiles;
+    const ctx = loadLevel(0);
+    const tiles = ctx.level.tiles;
     let hasBlock = false;
     for (const row of tiles) {
       if (row.includes('b')) {
@@ -119,15 +106,15 @@ suite('关卡解析', () => {
       }
     }
     if (hasBlock) {
-      const blockCells = Game.state.cells.filter((c) => c.block);
+      const blockCells = ctx.state.cells.filter((c) => c.block);
       assert.ok(blockCells.length > 0);
     }
   });
 
   test('初始化时没有已分解落叶和已竞争微生物', () => {
-    loadLevel(0);
-    const decomposed = Game.state.cells.filter((c) => c.decomposed);
-    const competed = Game.state.cells.filter((c) => c.competed);
+    const ctx = loadLevel(0);
+    const decomposed = ctx.state.cells.filter((c) => c.decomposed);
+    const competed = ctx.state.cells.filter((c) => c.competed);
     assert.strictEqual(decomposed.length, 0);
     assert.strictEqual(competed.length, 0);
   });
@@ -135,35 +122,36 @@ suite('关卡解析', () => {
 
 suite('可扩张判断', () => {
   test('起始格子不可扩张（已占领）', () => {
-    loadLevel(0);
-    const start = Game.currentLevel().start;
-    assert.strictEqual(canGrowAt(start[0], start[1]), false);
+    const ctx = loadLevel(0);
+    const start = ctx.level.start;
+    assert.strictEqual(canGrowAt(ctx, start[0], start[1]), false);
   });
 
   test('与菌丝相邻的格子可扩张', () => {
-    loadLevel(0);
-    const start = Game.currentLevel().start;
-    const neighbors = Game.neighbors(Game.cellAt(start[0], start[1]));
-    const hasGrowable = neighbors.some((c) => !c.block && Game.canGrow(c));
+    const ctx = loadLevel(0);
+    const start = ctx.level.start;
+    const startCell = cellAt(ctx.state, start[0], start[1]);
+    const neighborCells = neighbors(ctx.state, startCell);
+    const hasGrowable = neighborCells.some((c) => !c.block && canGrow(ctx.state, c));
     assert.ok(hasGrowable);
   });
 
   test('不与菌丝相邻的格子不可扩张', () => {
-    loadLevel(0);
-    assert.strictEqual(canGrowAt(0, 0), false);
+    const ctx = loadLevel(0);
+    assert.strictEqual(canGrowAt(ctx, 0, 0), false);
   });
 
   test('模拟扩张返回正确原因：已占领', () => {
-    loadLevel(0);
-    const start = Game.currentLevel().start;
-    const result = simulateAt(start[0], start[1]);
+    const ctx = loadLevel(0);
+    const start = ctx.level.start;
+    const result = simulateAt(ctx, start[0], start[1]);
     assert.strictEqual(result.canGrow, false);
     assert.strictEqual(result.reason, '已占领');
   });
 
   test('模拟扩张返回正确原因：未连接菌丝', () => {
-    loadLevel(0);
-    const result = simulateAt(0, 0);
+    const ctx = loadLevel(0);
+    const result = simulateAt(ctx, 0, 0);
     assert.strictEqual(result.canGrow, false);
     assert.strictEqual(result.reason, '未连接菌丝');
   });
@@ -171,85 +159,92 @@ suite('可扩张判断', () => {
 
 suite('不同土壤消耗', () => {
   test('壤土消耗为3', () => {
-    loadLevel(0);
-    const start = Game.currentLevel().start;
-    const startCell = Game.cellAt(start[0], start[1]);
-    const neighbors = Game.neighbors(startCell);
-    const loamNeighbor = neighbors.find((c) => c.soil === 'loam' && !c.block);
+    const ctx = loadLevel(0);
+    const start = ctx.level.start;
+    const startCell = cellAt(ctx.state, start[0], start[1]);
+    const neighborCells = neighbors(ctx.state, startCell);
+    const loamNeighbor = neighborCells.find((c) => c.soil === 'loam' && !c.block);
     if (loamNeighbor) {
-      const result = Game.simulateGrow(loamNeighbor);
+      const result = simulateGrow(ctx.state, loamNeighbor);
       assert.strictEqual(result.cost, 3);
     }
   });
 
   test('湿土消耗为2', () => {
-    loadLevel(0);
-    const cell = Game.cellAt(6, 1);
+    const ctx = loadLevel(0);
+    const cell = cellAt(ctx.state, 6, 1);
     cell.mycelium = false;
-    const neighbor = Game.cellAt(5, 1);
+    const neighbor = cellAt(ctx.state, 5, 1);
     neighbor.mycelium = true;
-    const result = Game.simulateGrow(cell);
+    const result = simulateGrow(ctx.state, cell);
     if (result.canGrow) {
       assert.strictEqual(result.cost, 2);
     }
   });
 
   test('干层消耗为6', () => {
-    loadLevel(0);
-    const cell = Game.cellAt(3, 1);
+    const ctx = loadLevel(0);
+    const cell = cellAt(ctx.state, 3, 1);
     cell.mycelium = false;
-    const neighbor = Game.cellAt(3, 2);
+    const neighbor = cellAt(ctx.state, 3, 2);
     neighbor.mycelium = true;
-    const result = Game.simulateGrow(cell);
+    const result = simulateGrow(ctx.state, cell);
     if (result.canGrow) {
       assert.strictEqual(result.cost, 6);
     }
   });
 
   test('扩张壤土后养分减少3', () => {
-    loadLevel(0);
-    Game.state.nutrients = 20;
-    const start = Game.currentLevel().start;
-    const startCell = Game.cellAt(start[0], start[1]);
-    const neighbors = Game.neighbors(startCell);
-    const loamNeighbor = neighbors.find((c) => c.soil === 'loam' && !c.block && !c.microbe && !c.leaf && !c.tree);
+    const ctx = loadLevel(0);
+    ctx.state.nutrients = 20;
+    const start = ctx.level.start;
+    const startCell = cellAt(ctx.state, start[0], start[1]);
+    const neighborCells = neighbors(ctx.state, startCell);
+    const loamNeighbor = neighborCells.find(
+      (c) => c.soil === 'loam' && !c.block && !c.microbe && !c.leaf && !c.tree
+    );
     if (loamNeighbor) {
-      Game.grow(loamNeighbor);
-      assert.strictEqual(Game.state.nutrients, 17);
+      const result = grow(ctx.state, ctx.history, loamNeighbor);
+      ctx.state = result.state;
+      ctx.history = result.history;
+      assert.strictEqual(ctx.state.nutrients, 17);
     }
   });
 });
 
 suite('落叶分解', () => {
   test('分解落叶获得8养分', () => {
-    loadLevel(0);
-    Game.state.nutrients = 20;
-    const leafCell = Game.cellAt(4, 1);
-    const neighbor = Game.cellAt(4, 2);
+    const ctx = loadLevel(0);
+    ctx.state.nutrients = 20;
+    const leafCell = cellAt(ctx.state, 4, 1);
+    const neighbor = cellAt(ctx.state, 4, 2);
     neighbor.mycelium = true;
-    const result = Game.simulateGrow(leafCell);
+    const result = simulateGrow(ctx.state, leafCell);
     const leafEffect = result.effects.find((e) => e.type === 'leaf');
     assert.ok(leafEffect);
     assert.strictEqual(leafEffect.value, 8);
   });
 
   test('扩张到落叶格子后标记为已分解', () => {
-    loadLevel(0);
-    const leafCell = Game.cellAt(4, 1);
-    const neighbor = Game.cellAt(4, 2);
+    const ctx = loadLevel(0);
+    const leafCell = cellAt(ctx.state, 4, 1);
+    const neighbor = cellAt(ctx.state, 4, 2);
     neighbor.mycelium = true;
-    Game.grow(leafCell);
-    assert.ok(leafCell.decomposed);
+    const result = grow(ctx.state, ctx.history, leafCell);
+    ctx.state = result.state;
+    ctx.history = result.history;
+    const updatedLeaf = cellAt(ctx.state, 4, 1);
+    assert.ok(updatedLeaf.decomposed);
   });
 
   test('已分解的落叶不再提供养分', () => {
-    loadLevel(0);
-    const leafCell = Game.cellAt(4, 1);
+    const ctx = loadLevel(0);
+    const leafCell = cellAt(ctx.state, 4, 1);
     leafCell.decomposed = true;
     leafCell.mycelium = false;
-    const neighbor = Game.cellAt(4, 2);
+    const neighbor = cellAt(ctx.state, 4, 2);
     neighbor.mycelium = true;
-    const result = Game.simulateGrow(leafCell);
+    const result = simulateGrow(ctx.state, leafCell);
     const leafEffect = result.effects.find((e) => e.type === 'leaf');
     assert.strictEqual(leafEffect, undefined);
   });
@@ -257,60 +252,66 @@ suite('落叶分解', () => {
 
 suite('树根连接', () => {
   test('连接湿土树根获得5养分回馈', () => {
-    loadLevel(0);
-    Game.state.nutrients = 20;
-    const treeCell = Game.cellAt(8, 3);
+    const ctx = loadLevel(0);
+    ctx.state.nutrients = 20;
+    const treeCell = cellAt(ctx.state, 8, 3);
     treeCell.soil = 'wet';
-    const neighbor = Game.cellAt(7, 3);
+    const neighbor = cellAt(ctx.state, 7, 3);
     neighbor.mycelium = true;
-    const result = Game.simulateGrow(treeCell);
+    const result = simulateGrow(ctx.state, treeCell);
     const treeEffect = result.effects.find((e) => e.type === 'tree');
     assert.ok(treeEffect);
     assert.strictEqual(treeEffect.value, 5);
   });
 
   test('连接非湿土树根获得3养分回馈', () => {
-    loadLevel(0);
-    Game.state.nutrients = 20;
-    const treeCell = Game.cellAt(8, 3);
+    const ctx = loadLevel(0);
+    ctx.state.nutrients = 20;
+    const treeCell = cellAt(ctx.state, 8, 3);
     treeCell.soil = 'loam';
-    const neighbor = Game.cellAt(7, 3);
+    const neighbor = cellAt(ctx.state, 7, 3);
     neighbor.mycelium = true;
-    const result = Game.simulateGrow(treeCell);
+    const result = simulateGrow(ctx.state, treeCell);
     const treeEffect = result.effects.find((e) => e.type === 'tree');
     assert.ok(treeEffect);
     assert.strictEqual(treeEffect.value, 3);
   });
 
   test('回合推进时每处已连接树根回馈2养分', () => {
-    loadLevel(0);
-    Game.state.nutrients = 20;
-    Game.state.cells.filter((c) => c.tree).slice(0, 2).forEach((c) => { c.mycelium = true; });
-    const prevNutrients = Game.state.nutrients;
-    Game.nextTurn();
-    const expectedUpkeep = Math.max(1, Math.floor(2 / 8));
+    const ctx = loadLevel(0);
+    ctx.state.nutrients = 20;
+    ctx.state.cells.filter((c) => c.tree).slice(0, 2).forEach((c) => { c.mycelium = true; });
+    const prevNutrients = ctx.state.nutrients;
+    const result = nextTurn(ctx.state, ctx.history);
+    ctx.state = result.state;
+    ctx.history = result.history;
+    const myceliumCount = 2;
+    const expectedUpkeep = Math.max(1, Math.floor(myceliumCount / 8));
     const expectedDelta = 2 * 2 - expectedUpkeep;
-    assert.strictEqual(Game.state.nutrients, prevNutrients + expectedDelta);
+    assert.strictEqual(ctx.state.nutrients, prevNutrients + expectedDelta);
   });
 
   test('扩张到树根格子后标记为已占领', () => {
-    loadLevel(0);
-    const treeCell = Game.cellAt(8, 3);
-    const neighbor = Game.cellAt(7, 3);
+    const ctx = loadLevel(0);
+    const treeCell = cellAt(ctx.state, 8, 3);
+    const neighbor = cellAt(ctx.state, 7, 3);
     neighbor.mycelium = true;
-    Game.grow(treeCell);
-    assert.ok(treeCell.mycelium);
+    const result = grow(ctx.state, ctx.history, treeCell);
+    ctx.state = result.state;
+    ctx.history = result.history;
+    const updatedTree = cellAt(ctx.state, 8, 3);
+    assert.ok(updatedTree.mycelium);
   });
 });
 
 suite('微生物竞争', () => {
   test('微生物格子额外消耗3养分', () => {
-    loadLevel(0);
-    const microbeCell = Game.cellAt(4, 3);
-    const neighbor = Game.cellAt(4, 2);
+    const ctx = loadLevel(0);
+    const microbeCell = cellAt(ctx.state, 4, 3);
+    const neighbor = cellAt(ctx.state, 4, 2);
     neighbor.mycelium = true;
-    const baseCost = Game.cost[microbeCell.soil];
-    const result = Game.simulateGrow(microbeCell);
+    const baseCost = cost[microbeCell.soil];
+    const result = simulateGrow(ctx.state, microbeCell);
     assert.strictEqual(result.cost, baseCost + 3);
     const microbeEffect = result.effects.find((e) => e.type === 'microbe');
     assert.ok(microbeEffect);
@@ -318,41 +319,44 @@ suite('微生物竞争', () => {
   });
 
   test('已竞争过的微生物格子不再额外消耗', () => {
-    loadLevel(0);
-    const microbeCell = Game.cellAt(4, 3);
+    const ctx = loadLevel(0);
+    const microbeCell = cellAt(ctx.state, 4, 3);
     microbeCell.competed = true;
     microbeCell.mycelium = false;
-    const neighbor = Game.cellAt(4, 2);
+    const neighbor = cellAt(ctx.state, 4, 2);
     neighbor.mycelium = true;
-    const baseCost = Game.cost[microbeCell.soil];
-    const result = Game.simulateGrow(microbeCell);
+    const baseCost = cost[microbeCell.soil];
+    const result = simulateGrow(ctx.state, microbeCell);
     assert.strictEqual(result.cost, baseCost);
   });
 
   test('扩张到微生物格子后标记为已竞争', () => {
-    loadLevel(0);
-    const microbeCell = Game.cellAt(4, 3);
-    const neighbor = Game.cellAt(4, 2);
+    const ctx = loadLevel(0);
+    const microbeCell = cellAt(ctx.state, 4, 3);
+    const neighbor = cellAt(ctx.state, 4, 2);
     neighbor.mycelium = true;
-    Game.grow(microbeCell);
-    assert.ok(microbeCell.competed);
+    const result = grow(ctx.state, ctx.history, microbeCell);
+    ctx.state = result.state;
+    ctx.history = result.history;
+    const updatedMicrobe = cellAt(ctx.state, 4, 3);
+    assert.ok(updatedMicrobe.competed);
   });
 
   test('确定性随机数生成：同一关卡种子相同', () => {
-    const seed1 = Game.seedForLevel(0);
-    const seed2 = Game.seedForLevel(0);
+    const seed1 = seedForLevel(0);
+    const seed2 = seedForLevel(0);
     assert.strictEqual(seed1, seed2);
   });
 
   test('确定性随机数生成：不同关卡种子不同', () => {
-    const seed1 = Game.seedForLevel(0);
-    const seed2 = Game.seedForLevel(1);
+    const seed1 = seedForLevel(0);
+    const seed2 = seedForLevel(1);
     assert.notStrictEqual(seed1, seed2);
   });
 
   test('Mulberry32 PRNG产生确定性序列', () => {
-    const state1 = Game.mulberry32Step(42);
-    const state2 = Game.mulberry32Step(42);
+    const state1 = mulberry32Step(42);
+    const state2 = mulberry32Step(42);
     assert.strictEqual(state1.value, state2.value);
     assert.strictEqual(state1.nextState, state2.nextState);
   });
@@ -360,104 +364,111 @@ suite('微生物竞争', () => {
 
 suite('撤销功能', () => {
   test('扩张后撤销可恢复养分', () => {
-    loadLevel(0);
-    const initialNutrients = Game.state.nutrients;
-    const start = Game.currentLevel().start;
-    const startCell = Game.cellAt(start[0], start[1]);
-    const neighbors = Game.neighbors(startCell);
-    const target = neighbors.find((c) => !c.block && !c.microbe && !c.leaf && !c.tree);
+    const ctx = loadLevel(0);
+    const initialNutrients = ctx.state.nutrients;
+    const start = ctx.level.start;
+    const startCell = cellAt(ctx.state, start[0], start[1]);
+    const neighborCells = neighbors(ctx.state, startCell);
+    const target = neighborCells.find((c) => !c.block && !c.microbe && !c.leaf && !c.tree);
     if (target) {
-      Game.grow(target);
-      assert.notStrictEqual(Game.state.nutrients, initialNutrients);
-      Game.state = JSON.parse(Game.history.pop());
-      assert.strictEqual(Game.state.nutrients, initialNutrients);
+      const result = grow(ctx.state, ctx.history, target);
+      ctx.state = result.state;
+      ctx.history = result.history;
+      assert.notStrictEqual(ctx.state.nutrients, initialNutrients);
+      ctx.state = JSON.parse(ctx.history.pop());
+      assert.strictEqual(ctx.state.nutrients, initialNutrients);
     }
   });
 
   test('扩张后撤销可恢复菌丝占领状态', () => {
-    loadLevel(0);
-    const start = Game.currentLevel().start;
-    const startCell = Game.cellAt(start[0], start[1]);
-    const neighbors = Game.neighbors(startCell);
-    const target = neighbors.find((c) => !c.block);
+    const ctx = loadLevel(0);
+    const start = ctx.level.start;
+    const startCell = cellAt(ctx.state, start[0], start[1]);
+    const neighborCells = neighbors(ctx.state, startCell);
+    const target = neighborCells.find((c) => !c.block);
     if (target) {
-      Game.grow(target);
       const targetX = target.x;
       const targetY = target.y;
-      Game.state = JSON.parse(Game.history.pop());
-      const restoredCell = Game.cellAt(targetX, targetY);
+      const result = grow(ctx.state, ctx.history, target);
+      ctx.state = result.state;
+      ctx.history = result.history;
+      ctx.state = JSON.parse(ctx.history.pop());
+      const restoredCell = cellAt(ctx.state, targetX, targetY);
       assert.strictEqual(restoredCell.mycelium, false);
     }
   });
 
   test('历史记录保存成功', () => {
-    loadLevel(0);
-    Game.saveHistory();
-    assert.strictEqual(Game.history.length, 1);
+    const ctx = loadLevel(0);
+    ctx.history = saveHistory(ctx.history, ctx.state);
+    assert.strictEqual(ctx.history.length, 1);
   });
 
   test('历史记录超过40条时移除最旧记录', () => {
-    loadLevel(0);
+    const ctx = loadLevel(0);
     for (let i = 0; i < 50; i++) {
-      Game.saveHistory();
+      ctx.history = saveHistory(ctx.history, ctx.state);
     }
-    assert.strictEqual(Game.history.length, 40);
+    assert.strictEqual(ctx.history.length, 40);
   });
 
   test('撤销恢复分解状态', () => {
-    loadLevel(0);
-    const leafCell = Game.cellAt(4, 1);
-    const neighbor = Game.cellAt(4, 2);
+    const ctx = loadLevel(0);
+    const leafCell = cellAt(ctx.state, 4, 1);
+    const neighbor = cellAt(ctx.state, 4, 2);
     neighbor.mycelium = true;
-    Game.grow(leafCell);
-    assert.ok(leafCell.decomposed);
-    Game.state = JSON.parse(Game.history.pop());
-    const restoredLeaf = Game.cellAt(4, 1);
+    const result = grow(ctx.state, ctx.history, leafCell);
+    ctx.state = result.state;
+    ctx.history = result.history;
+    const grownLeaf = cellAt(ctx.state, 4, 1);
+    assert.ok(grownLeaf.decomposed);
+    ctx.state = JSON.parse(ctx.history.pop());
+    const restoredLeaf = cellAt(ctx.state, 4, 1);
     assert.strictEqual(restoredLeaf.decomposed, false);
   });
 });
 
 suite('胜利条件', () => {
   test('关卡1需要3个树根和2片落叶', () => {
-    loadLevel(0);
-    const winCondition = Game.currentLevel().winCondition;
+    const ctx = loadLevel(0);
+    const winCondition = ctx.level.winCondition;
     assert.strictEqual(winCondition.requiredTrees, 3);
     assert.strictEqual(winCondition.requiredLeaves, 2);
   });
 
   test('关卡2需要4个树根和0片落叶', () => {
-    loadLevel(1);
-    const winCondition = Game.currentLevel().winCondition;
+    const ctx = loadLevel(1);
+    const winCondition = ctx.level.winCondition;
     assert.strictEqual(winCondition.requiredTrees, 4);
     assert.strictEqual(winCondition.requiredLeaves, 0);
   });
 
   test('未满足条件时不判定胜利', () => {
-    loadLevel(0);
-    assert.strictEqual(checkWin(), false);
+    const ctx = loadLevel(0);
+    assert.strictEqual(checkWin(ctx.state, ctx.level.winCondition), false);
   });
 
   test('连接足够树根和分解足够落叶后判定胜利', () => {
-    loadLevel(0);
-    const winCondition = Game.currentLevel().winCondition;
-    Game.state.cells.filter((c) => c.tree).slice(0, winCondition.requiredTrees).forEach((c) => { c.mycelium = true; });
-    Game.state.cells.filter((c) => c.leaf).slice(0, winCondition.requiredLeaves).forEach((c) => { c.decomposed = true; });
-    assert.strictEqual(checkWin(), true);
+    const ctx = loadLevel(0);
+    const winCondition = ctx.level.winCondition;
+    ctx.state.cells.filter((c) => c.tree).slice(0, winCondition.requiredTrees).forEach((c) => { c.mycelium = true; });
+    ctx.state.cells.filter((c) => c.leaf).slice(0, winCondition.requiredLeaves).forEach((c) => { c.decomposed = true; });
+    assert.strictEqual(checkWin(ctx.state, winCondition), true);
   });
 
   test('关卡2仅需树根无需落叶', () => {
-    loadLevel(1);
-    const winCondition = Game.currentLevel().winCondition;
-    Game.state.cells.filter((c) => c.tree).slice(0, winCondition.requiredTrees).forEach((c) => { c.mycelium = true; });
-    assert.strictEqual(checkWin(), true);
+    const ctx = loadLevel(1);
+    const winCondition = ctx.level.winCondition;
+    ctx.state.cells.filter((c) => c.tree).slice(0, winCondition.requiredTrees).forEach((c) => { c.mycelium = true; });
+    assert.strictEqual(checkWin(ctx.state, winCondition), true);
   });
 
   test('树根数量不足时不胜利', () => {
-    loadLevel(0);
-    const winCondition = Game.currentLevel().winCondition;
-    Game.state.cells.filter((c) => c.tree).slice(0, winCondition.requiredTrees - 1).forEach((c) => { c.mycelium = true; });
-    Game.state.cells.filter((c) => c.leaf).slice(0, winCondition.requiredLeaves).forEach((c) => { c.decomposed = true; });
-    assert.strictEqual(checkWin(), false);
+    const ctx = loadLevel(0);
+    const winCondition = ctx.level.winCondition;
+    ctx.state.cells.filter((c) => c.tree).slice(0, winCondition.requiredTrees - 1).forEach((c) => { c.mycelium = true; });
+    ctx.state.cells.filter((c) => c.leaf).slice(0, winCondition.requiredLeaves).forEach((c) => { c.decomposed = true; });
+    assert.strictEqual(checkWin(ctx.state, winCondition), false);
   });
 });
 

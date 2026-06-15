@@ -2,7 +2,18 @@
   "name": "subsoil-network",
   "version": "1.0.0",
   "description": "地下菌丝网络 - 静态浏览器小游戏",
+  "type": "module",
   "scripts": {
-    "test": "node test/runner.js"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node test/runner.js",
+    "lint": "eslint \"src/**/*.js\" \"test/**/*.js\"",
+    "lint:fix": "eslint \"src/**/*.js\" \"test/**/*.js\" --fix"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "eslint": "^9.9.0",
+    "@eslint/js": "^9.9.0"
   }
 }

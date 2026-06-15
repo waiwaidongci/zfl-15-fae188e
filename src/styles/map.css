@@ -1,0 +1,290 @@
+.map-wrap {
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(420px, 1fr) auto;
+}
+
+.bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.bar p {
+  margin: 0 0 4px;
+  color: #8b5735;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.resource {
+  min-width: 100px;
+  text-align: right;
+}
+
+.resource span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.resource strong {
+  display: block;
+  font-size: 34px;
+}
+
+.map {
+  align-self: center;
+  justify-self: center;
+  width: min(92vmin, 820px);
+  aspect-ratio: 1;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
+  padding: 18px;
+}
+
+.cell {
+  position: relative;
+  min-width: 0;
+  border: 1px solid rgba(49, 54, 38, 0.18);
+  border-radius: 7px;
+  background: #8a7350;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 0;
+  color: inherit;
+}
+
+.cell:focus {
+  outline: none;
+}
+
+.cell:focus-visible {
+  outline: 3px solid #f4d35e;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px rgba(244, 211, 94, 0.25), 0 4px 14px rgba(0, 0, 0, 0.28);
+  transform: translateY(-2px) scale(1.03);
+  z-index: 3;
+}
+
+.cell.focused {
+  transform: translateY(-1px);
+}
+
+.cell:hover {
+  transform: translateY(-1px);
+  border-color: rgba(244, 240, 207, 0.9);
+}
+
+.cell.loam { background: #876f4e; }
+.cell.wet { background: #526f75; }
+.cell.dry { background: #b89559; }
+.cell.block { background: #3c382f; cursor: not-allowed; }
+
+.cell.mycelium::before {
+  content: "";
+  position: absolute;
+  inset: 18%;
+  border: 3px solid var(--mycelium);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(244, 240, 207, 0.18), 0 0 18px rgba(244, 240, 207, 0.45);
+  animation: pulse 0.55s ease;
+}
+
+.cell.frontier {
+  outline: 3px solid rgba(244, 240, 207, 0.36);
+}
+
+.cell.tree::after,
+.cell.leaf::after,
+.cell.microbe::after {
+  position: absolute;
+  inset: 18%;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  font-weight: 900;
+}
+
+.cell.tree::after {
+  content: "T";
+  background: var(--moss);
+}
+
+.cell.leaf::after {
+  content: "L";
+  background: var(--leaf);
+}
+
+.cell.microbe::after {
+  content: "M";
+  background: var(--microbe);
+}
+
+.cell.mycelium.tree::after,
+.cell.mycelium.leaf::after,
+.cell.mycelium.microbe::after {
+  inset: 26%;
+}
+
+@keyframes pulse {
+  from { transform: scale(0.4); opacity: 0.2; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.cell.selected {
+  outline: 3px solid var(--moss);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.cell.hovered {
+  border-color: var(--moss);
+  transform: translateY(-1px);
+}
+
+.cell.previewing {
+  transform: translateY(-2px) scale(1.03);
+  z-index: 2;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, outline-color 0.18s ease;
+}
+
+.cell.previewing.preview-positive {
+  outline: 4px solid #7aa54f;
+  box-shadow: 0 0 0 3px rgba(122, 165, 79, 0.25), 0 6px 18px rgba(60, 90, 30, 0.3);
+  animation: previewPulseGood 1.2s ease infinite;
+}
+
+.cell.previewing.preview-negative {
+  outline: 4px solid #c98a3c;
+  box-shadow: 0 0 0 3px rgba(201, 138, 60, 0.22), 0 6px 18px rgba(120, 70, 20, 0.25);
+}
+
+.cell.previewing.preview-negative-low {
+  outline: 4px solid #b55a3a;
+  box-shadow: 0 0 0 3px rgba(181, 90, 58, 0.25), 0 6px 18px rgba(140, 50, 20, 0.3);
+}
+
+.cell.previewing.preview-negative-danger {
+  outline: 4px solid #a23535;
+  box-shadow: 0 0 0 3px rgba(162, 53, 53, 0.3), 0 6px 18px rgba(120, 20, 20, 0.4);
+  animation: previewPulseDanger 0.8s ease infinite;
+}
+
+.cell.previewing.preview-blocked {
+  outline: 4px solid #6c6a66;
+  box-shadow: 0 0 0 3px rgba(108, 106, 102, 0.25);
+  filter: brightness(0.82) saturate(0.7);
+  cursor: not-allowed;
+}
+
+.cell.previewing::before {
+  content: "";
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  border: 2px dashed rgba(244, 240, 207, 0.7);
+  animation: previewSpin 1.6s linear infinite;
+  pointer-events: none;
+}
+
+.cell.previewing.preview-blocked::before {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-style: solid;
+  animation: none;
+}
+
+@keyframes previewPulseGood {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(122, 165, 79, 0.25), 0 6px 18px rgba(60, 90, 30, 0.3); }
+  50% { box-shadow: 0 0 0 5px rgba(122, 165, 79, 0.18), 0 6px 18px rgba(60, 90, 30, 0.3); }
+}
+
+@keyframes previewPulseDanger {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(162, 53, 53, 0.3), 0 6px 18px rgba(120, 20, 20, 0.4); }
+  50% { box-shadow: 0 0 0 5px rgba(162, 53, 53, 0.18), 0 6px 18px rgba(120, 20, 20, 0.4); }
+}
+
+@keyframes previewSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend i {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  border-radius: 3px;
+}
+
+.legend .loam { background: #876f4e; }
+.legend .wet { background: var(--wet); }
+.legend .dry { background: var(--dry); }
+.legend .leaf { background: var(--leaf); }
+.legend .tree { background: var(--moss); }
+.legend .microbe { background: var(--microbe); }
+
+.resource .nutrient-base {
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 26px;
+  opacity: 0.85;
+}
+
+.resource .nutrient-preview-arrow {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 20px;
+  margin: 0 4px;
+}
+
+.resource .nutrient-preview {
+  font-weight: 900;
+  font-size: 30px;
+}
+
+.resource .nutrient-preview.nutrient-up {
+  color: #4a7a2e;
+}
+
+.resource .nutrient-preview.nutrient-down {
+  color: #a24535;
+}
+
+.resource .nutrient-delta {
+  font-size: 14px;
+  font-weight: 700;
+  margin-left: 4px;
+  opacity: 0.9;
+}
+
+.resource .nutrient-delta.delta-up {
+  color: #4a7a2e;
+}
+
+.resource .nutrient-delta.delta-down {
+  color: #a24535;
+}
