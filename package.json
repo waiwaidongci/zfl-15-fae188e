@@ -1,0 +1,8 @@
+{
+  "name": "subsoil-network",
+  "version": "1.0.0",
+  "description": "地下菌丝网络 - 静态浏览器小游戏",
+  "scripts": {
+    "test": "node test/runner.js"
+  }
+}
