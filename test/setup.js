@@ -74,6 +74,17 @@ function loadGameSources() {
   global.Game.activateFocused = function() {};
   global.Game._getFocusStartCell = function() { return null; };
   global.Game.countLevelStats = function(level) { return { trees: 0, leaves: 0, microbes: 0 }; };
+  global.Game.toggleEditor = function() {};
+  global.Game.editorLoadFromCurrent = function() {};
+  global.Game.editorFillExample = function() {};
+  global.Game.editorClearMap = function() {};
+  global.Game.editorCollectFormData = function() { return {}; };
+  global.Game.editorValidate = function() {};
+  global.Game.editorRenderPreview = function() {};
+  global.Game.editorApplyLevel = function() {};
+  global.Game.editorExportJSON = function() {};
+  global.Game.editorTriggerImport = function() {};
+  global.Game.editorHandleImport = function() {};
 }
 
 createMinimalDom();

@@ -79,11 +79,77 @@
           <button id="undo">撤销</button>
           <button id="reset">重置</button>
           <button id="toggleGuide">关卡图鉴</button>
+          <button id="toggleEditor" style="grid-column: 1 / -1; color: white; border-color: #5d4e37; background: #5d4e37;">关卡编辑器</button>
         </section>
 
         <section class="guide" id="guide" hidden>
           <h2>关卡图鉴</h2>
           <div id="guideList" class="guide-list"></div>
+        </section>
+
+        <section class="editor" id="editor" hidden>
+          <h2>关卡编辑器</h2>
+          <div class="editor-field">
+            <label for="editorName">关卡名称</label>
+            <input type="text" id="editorName" placeholder="自定义关卡" maxlength="30" />
+          </div>
+          <div class="editor-field">
+            <label for="editorGoal">目标描述</label>
+            <input type="text" id="editorGoal" placeholder="例如：连接所有树根，分解落叶" maxlength="60" />
+          </div>
+          <div class="editor-grid">
+            <div class="editor-field">
+              <label for="editorNutrients">初始养分</label>
+              <input type="number" id="editorNutrients" value="30" min="1" max="200" />
+            </div>
+            <div class="editor-field">
+              <label for="editorStartX">起点 X (0-9)</label>
+              <input type="number" id="editorStartX" value="0" min="0" max="9" />
+            </div>
+            <div class="editor-field">
+              <label for="editorStartY">起点 Y (0-9)</label>
+              <input type="number" id="editorStartY" value="0" min="0" max="9" />
+            </div>
+            <div class="editor-field">
+              <label for="editorTrees">目标树根</label>
+              <input type="number" id="editorTrees" value="0" min="0" max="20" />
+            </div>
+            <div class="editor-field">
+              <label for="editorLeaves">目标落叶</label>
+              <input type="number" id="editorLeaves" value="0" min="0" max="20" />
+            </div>
+          </div>
+          <div class="editor-field">
+            <label>字符地图（10×10，每行10字符）</label>
+            <div class="editor-legend">
+              <span><code>l</code>壤土</span>
+              <span><code>w</code>湿土</span>
+              <span><code>d</code>干层</span>
+              <span><code>t</code>树根</span>
+              <span><code>f</code>落叶</span>
+              <span><code>m</code>微生物</span>
+              <span><code>b</code>障碍</span>
+              <span><code>s</code>起点(可选)</span>
+            </div>
+            <textarea id="editorMap" rows="10" spellcheck="false" placeholder="每行10个字符，共10行"></textarea>
+          </div>
+          <div class="editor-actions">
+            <button id="editorValidate" class="editor-btn-primary">校验关卡</button>
+            <button id="editorFillExample">填充示例</button>
+            <button id="editorClear">清空地图</button>
+          </div>
+          <div class="editor-validation" id="editorValidation" hidden></div>
+          <div class="editor-preview" id="editorPreview" hidden>
+            <h3>预览</h3>
+            <div id="editorPreviewMap" class="editor-preview-map" aria-label="关卡预览地图"></div>
+            <dl class="editor-preview-stats" id="editorPreviewStats"></dl>
+          </div>
+          <div class="editor-actions">
+            <button id="editorApply" class="editor-btn-success" disabled>应用并游玩</button>
+            <button id="editorExport">导出 JSON</button>
+            <button id="editorImportBtn">导入 JSON</button>
+            <input type="file" id="editorImport" accept=".json,application/json" hidden />
+          </div>
         </section>
 
         <section class="log" aria-label="土壤记录">

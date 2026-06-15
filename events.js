@@ -6,9 +6,31 @@ Game.init = function() {
   document.querySelector("#nextTurn").addEventListener("click", Game.nextTurn);
   document.querySelector("#reset").addEventListener("click", Game.reset);
   document.querySelector("#toggleGuide").addEventListener("click", Game.toggleGuide);
+  document.querySelector("#toggleEditor").addEventListener("click", Game.toggleEditor);
+  document.querySelector("#editorValidate").addEventListener("click", Game.editorValidate);
+  document.querySelector("#editorFillExample").addEventListener("click", Game.editorFillExample);
+  document.querySelector("#editorClear").addEventListener("click", Game.editorClearMap);
+  document.querySelector("#editorApply").addEventListener("click", Game.editorApplyLevel);
+  document.querySelector("#editorExport").addEventListener("click", Game.editorExportJSON);
+  document.querySelector("#editorImportBtn").addEventListener("click", Game.editorTriggerImport);
+  document.querySelector("#editorImport").addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) Game.editorHandleImport(file);
+    e.target.value = "";
+  });
   Game.levelSelectEl.addEventListener("change", (e) => {
-    Game.levelIndex = parseInt(e.target.value, 10);
-    Game.reset();
+    const idx = parseInt(e.target.value, 10);
+    if (idx >= Game.levels.length) {
+      if (Game.customLevel) {
+        Game.isCustomLevel = true;
+        Game.reset();
+      }
+    } else {
+      Game.levelIndex = idx;
+      Game.isCustomLevel = false;
+      Game.reset();
+    }
+    Game.renderLevelOptions();
     if (!document.querySelector("#guide").hidden) Game.renderGuide();
   });
   document.querySelector("#undo").addEventListener("click", () => {

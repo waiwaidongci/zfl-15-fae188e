@@ -17,7 +17,15 @@ Game.renderLevelOptions = function() {
     option.textContent = level.name;
     Game.levelSelectEl.appendChild(option);
   });
-  Game.levelSelectEl.value = Game.levelIndex;
+  if (Game.isCustomLevel && Game.customLevel) {
+    const option = document.createElement("option");
+    option.value = Game.levels.length;
+    option.textContent = "★ " + (Game.customLevel.name || "自定义关卡");
+    Game.levelSelectEl.appendChild(option);
+    Game.levelSelectEl.value = Game.levels.length;
+  } else {
+    Game.levelSelectEl.value = Game.levelIndex;
+  }
 };
 
 Game.ensureMapDom = function() {
@@ -234,8 +242,11 @@ Game._getFocusStartCell = function() {
     const cell = Game.cellAt(bx, by);
     if (cell) return cell;
   }
-  const start = Game.currentLevel().start;
-  return Game.cellAt(start[0], start[1]);
+  const current = Game.currentLevel();
+  if (current && current.start) {
+    return Game.cellAt(current.start[0], current.start[1]);
+  }
+  return Game.cellAt(0, 0);
 };
 
 Game.activateFocused = function() {
@@ -531,7 +542,8 @@ Game.renderGuide = function() {
   Game.levels.forEach((level, index) => {
     const stats = Game.countLevelStats(level);
     const item = document.createElement("div");
-    item.className = "guide-item" + (index === Game.levelIndex ? " active" : "");
+    item.className = "guide-item" +
+      (!Game.isCustomLevel && index === Game.levelIndex ? " active" : "");
     item.innerHTML = `
       <h3>${level.name}</h3>
       <p class="guide-goal">${level.goal}</p>
@@ -544,11 +556,30 @@ Game.renderGuide = function() {
     `;
     item.addEventListener("click", () => {
       Game.levelIndex = index;
+      Game.isCustomLevel = false;
       Game.reset();
       Game.renderGuide();
+      Game.renderLevelOptions();
     });
     guideList.appendChild(item);
   });
+  if (Game.isCustomLevel && Game.customLevel) {
+    const level = Game.customLevel;
+    const stats = Game.countLevelStats(level);
+    const item = document.createElement("div");
+    item.className = "guide-item active";
+    item.innerHTML = `
+      <h3>★ ${level.name}</h3>
+      <p class="guide-goal">${level.goal}</p>
+      <dl>
+        <div><dt>初始养分</dt><dd>${level.nutrients}</dd></div>
+        <div><dt>树根数量</dt><dd>${stats.trees}</dd></div>
+        <div><dt>落叶数量</dt><dd>${stats.leaves}</dd></div>
+        <div><dt>微生物数量</dt><dd>${stats.microbes}</dd></div>
+      </dl>
+    `;
+    guideList.appendChild(item);
+  }
 };
 
 Game.toggleGuide = function() {
@@ -559,4 +590,306 @@ Game.toggleGuide = function() {
   } else {
     guide.hidden = true;
   }
+};
+
+Game.toggleEditor = function() {
+  const editor = document.querySelector("#editor");
+  const guide = document.querySelector("#guide");
+  if (editor.hidden) {
+    editor.hidden = false;
+    guide.hidden = true;
+    Game.editorLoadFromCurrent();
+  } else {
+    editor.hidden = true;
+  }
+};
+
+Game.editorLoadFromCurrent = function() {
+  const level = Game.currentLevel();
+  document.querySelector("#editorName").value = Game.isCustomLevel ? level.name : "";
+  document.querySelector("#editorGoal").value = Game.isCustomLevel ? level.goal : "";
+  document.querySelector("#editorNutrients").value = level.nutrients;
+  document.querySelector("#editorStartX").value = level.start[0];
+  document.querySelector("#editorStartY").value = level.start[1];
+  document.querySelector("#editorTrees").value = level.winCondition.requiredTrees;
+  document.querySelector("#editorLeaves").value = level.winCondition.requiredLeaves;
+  const tiles = level.tiles.slice(0, 10);
+  while (tiles.length < 10) tiles.push("llllllllll");
+  document.querySelector("#editorMap").value = tiles.join("\n");
+  document.querySelector("#editorValidation").hidden = true;
+  document.querySelector("#editorPreview").hidden = true;
+  document.querySelector("#editorApply").disabled = true;
+};
+
+Game.editorFillExample = function() {
+  const example = [
+    "llllllllll",
+    "llldflwmll",
+    "llwllldlll",
+    "ldllmllltd",
+    "lllddllwll",
+    "llwlllllll",
+    "lllfdlmlll",
+    "lmllllldtl",
+    "lslldlllll",
+    "lllltllldl"
+  ];
+  document.querySelector("#editorMap").value = example.join("\n");
+  document.querySelector("#editorName").value = "自定义示例";
+  document.querySelector("#editorGoal").value = "连接3处树根，分解至少2片落叶";
+  document.querySelector("#editorNutrients").value = 34;
+  document.querySelector("#editorStartX").value = 1;
+  document.querySelector("#editorStartY").value = 8;
+  document.querySelector("#editorTrees").value = 3;
+  document.querySelector("#editorLeaves").value = 2;
+};
+
+Game.editorClearMap = function() {
+  const empty = [];
+  for (let i = 0; i < 10; i += 1) empty.push("llllllllll");
+  document.querySelector("#editorMap").value = empty.join("\n");
+  document.querySelector("#editorValidation").hidden = true;
+  document.querySelector("#editorPreview").hidden = true;
+  document.querySelector("#editorApply").disabled = true;
+};
+
+Game.editorCollectFormData = function() {
+  return {
+    name: document.querySelector("#editorName").value.trim(),
+    goal: document.querySelector("#editorGoal").value.trim(),
+    nutrients: Math.max(1, Math.min(200,
+      parseInt(document.querySelector("#editorNutrients").value, 10) || 30
+    )),
+    start: [
+      Math.max(0, Math.min(9,
+        parseInt(document.querySelector("#editorStartX").value, 10) || 0
+      )),
+      Math.max(0, Math.min(9,
+        parseInt(document.querySelector("#editorStartY").value, 10) || 0
+      ))
+    ],
+    winCondition: {
+      requiredTrees: Math.max(0, Math.min(20,
+        parseInt(document.querySelector("#editorTrees").value, 10) || 0
+      )),
+      requiredLeaves: Math.max(0, Math.min(20,
+        parseInt(document.querySelector("#editorLeaves").value, 10) || 0
+      ))
+    }
+  };
+};
+
+Game.editorValidate = function() {
+  const formData = Game.editorCollectFormData();
+  const mapText = document.querySelector("#editorMap").value;
+  const lines = Game.parseEditorMap(mapText);
+  const result = Game.validateLevel(formData, lines);
+
+  const validationEl = document.querySelector("#editorValidation");
+  validationEl.hidden = false;
+  validationEl.className = "editor-validation " +
+    (result.valid ? "validation-success" : "validation-error");
+
+  let html = "";
+  html += `<h4>${result.valid ? "✓ 校验通过" : "✕ 校验失败"}</h4>`;
+  html += "<ul>";
+
+  const criticalErrors = result.errors.filter(e => e.critical);
+  criticalErrors.forEach(e => {
+    html += `<li class="error-critical">错误：${e.msg}</li>`;
+  });
+  result.errors.filter(e => !e.critical).forEach(e => {
+    html += `<li>错误：${e.msg}</li>`;
+  });
+  result.warnings.forEach(w => {
+    html += `<li>警告：${w.msg}</li>`;
+  });
+  result.infos.forEach(i => {
+    html += `<li>信息：${i.msg}</li>`;
+  });
+
+  html += "</ul>";
+  validationEl.innerHTML = html;
+
+  Game.editorRenderPreview(lines, result.finalStart, result.stats);
+
+  const applyBtn = document.querySelector("#editorApply");
+  if (result.valid) {
+    applyBtn.disabled = false;
+    applyBtn.dataset.level = JSON.stringify({
+      form: formData,
+      lines: lines
+    });
+  } else {
+    applyBtn.disabled = true;
+    delete applyBtn.dataset.level;
+  }
+};
+
+Game.editorRenderPreview = function(lines, start, stats) {
+  const previewEl = document.querySelector("#editorPreview");
+  const mapEl = document.querySelector("#editorPreviewMap");
+  const statsEl = document.querySelector("#editorPreviewStats");
+
+  previewEl.hidden = false;
+  mapEl.innerHTML = "";
+
+  for (let y = 0; y < 10; y += 1) {
+    for (let x = 0; x < 10; x += 1) {
+      const ch = lines[y]?.[x] || "l";
+      const cell = document.createElement("div");
+      cell.className = "editor-preview-cell";
+
+      let soil = "loam";
+      if (ch === "w") soil = "wet";
+      else if (ch === "d") soil = "dry";
+      else if (ch === "b") soil = "block";
+      cell.classList.add(soil);
+
+      if (!Game.validEditorChars.includes(ch)) {
+        cell.style.background = "#a23535";
+        cell.title = `非法字符: ${ch}`;
+      }
+      if (ch === "t") cell.classList.add("tree");
+      if (ch === "f") cell.classList.add("leaf");
+      if (ch === "m") cell.classList.add("microbe");
+      if (start && x === start[0] && y === start[1] && ch !== "b") {
+        cell.classList.add("start");
+      }
+      if (ch === "s" && !(start && x === start[0] && y === start[1])) {
+        cell.classList.add("start");
+      }
+
+      mapEl.appendChild(cell);
+    }
+  }
+
+  const soilNames = { loam: "壤土", wet: "湿土", dry: "干层", block: "障碍" };
+  let totalCells = 100;
+  let soilCount = { loam: 0, wet: 0, dry: 0, block: 0 };
+  for (let y = 0; y < 10; y += 1) {
+    for (let x = 0; x < 10; x += 1) {
+      const ch = lines[y]?.[x];
+      if (ch === "w") soilCount.wet += 1;
+      else if (ch === "d") soilCount.dry += 1;
+      else if (ch === "b") soilCount.block += 1;
+      else soilCount.loam += 1;
+    }
+  }
+
+  statsEl.innerHTML = `
+    <div><dt>壤土</dt><dd>${soilCount.loam}</dd></div>
+    <div><dt>湿土</dt><dd>${soilCount.wet}</dd></div>
+    <div><dt>干层</dt><dd>${soilCount.dry}</dd></div>
+    <div><dt>障碍</dt><dd>${soilCount.block}</dd></div>
+    <div><dt>树根</dt><dd>${stats.trees}</dd></div>
+    <div><dt>落叶</dt><dd>${stats.leaves}</dd></div>
+    <div><dt>微生物</dt><dd>${stats.microbes}</dd></div>
+    <div><dt>起点</dt><dd>(${start[0]},${start[1]})</dd></div>
+  `;
+};
+
+Game.editorApplyLevel = function() {
+  const applyBtn = document.querySelector("#editorApply");
+  if (applyBtn.disabled || !applyBtn.dataset.level) return;
+  try {
+    const data = JSON.parse(applyBtn.dataset.level);
+    const level = Game.buildLevelFromEditor(data.form, data.lines);
+    Game.customLevel = level;
+    Game.isCustomLevel = true;
+    Game.reset();
+    Game.renderLevelOptions();
+    document.querySelector("#levelSelect").value = Game.levels.length;
+    const editor = document.querySelector("#editor");
+    editor.hidden = true;
+    Game.announce(`已加载自定义关卡：${level.name}`);
+  } catch (e) {
+    console.error(e);
+    alert("应用关卡失败：" + e.message);
+  }
+};
+
+Game.editorExportJSON = function() {
+  const formData = Game.editorCollectFormData();
+  const mapText = document.querySelector("#editorMap").value;
+  const lines = Game.parseEditorMap(mapText);
+  const result = Game.validateLevel(formData, lines);
+
+  const exportData = {
+    name: formData.name || "自定义关卡",
+    goal: formData.goal || "完成自定义目标",
+    nutrients: formData.nutrients,
+    start: result.finalStart,
+    winCondition: {
+      requiredTrees: formData.winCondition.requiredTrees,
+      requiredLeaves: formData.winCondition.requiredLeaves
+    },
+    tiles: lines.map(l => {
+      let out = "";
+      for (let x = 0; x < 10; x += 1) {
+        out += l[x] || "l";
+      }
+      return out;
+    }),
+    _exportedAt: new Date().toISOString()
+  };
+
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `level_${(exportData.name || "custom").replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, "_")}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+Game.editorTriggerImport = function() {
+  document.querySelector("#editorImport").click();
+};
+
+Game.editorHandleImport = function(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data || !Array.isArray(data.tiles)) {
+        throw new Error("无效的关卡文件：缺少 tiles 数组");
+      }
+      const tiles = data.tiles.slice(0, 10);
+      while (tiles.length < 10) tiles.push("llllllllll");
+      const normalizedTiles = tiles.map(row => {
+        let r = row.slice(0, 10);
+        while (r.length < 10) r += "l";
+        return r;
+      });
+
+      document.querySelector("#editorName").value = data.name || "";
+      document.querySelector("#editorGoal").value = data.goal || "";
+      document.querySelector("#editorNutrients").value =
+        (data.nutrients && data.nutrients > 0) ? data.nutrients : 30;
+      if (Array.isArray(data.start) && data.start.length === 2) {
+        document.querySelector("#editorStartX").value =
+          Math.max(0, Math.min(9, data.start[0]));
+        document.querySelector("#editorStartY").value =
+          Math.max(0, Math.min(9, data.start[1]));
+      }
+      if (data.winCondition) {
+        document.querySelector("#editorTrees").value =
+          Math.max(0, Math.min(20, data.winCondition.requiredTrees || 0));
+        document.querySelector("#editorLeaves").value =
+          Math.max(0, Math.min(20, data.winCondition.requiredLeaves || 0));
+      }
+      document.querySelector("#editorMap").value = normalizedTiles.join("\n");
+
+      document.querySelector("#editorValidation").hidden = true;
+      document.querySelector("#editorPreview").hidden = true;
+      document.querySelector("#editorApply").disabled = true;
+      Game.announce("已导入关卡文件，请点击校验按钮检查");
+    } catch (err) {
+      alert("导入失败：" + err.message);
+    }
+  };
+  reader.readAsText(file);
 };
