@@ -17,11 +17,13 @@ Game.renderLevelOptions = function() {
     option.textContent = level.name;
     Game.levelSelectEl.appendChild(option);
   });
-  if (Game.isCustomLevel && Game.customLevel) {
+  if (Game.customLevel) {
     const option = document.createElement("option");
     option.value = Game.levels.length;
     option.textContent = "★ " + (Game.customLevel.name || "自定义关卡");
     Game.levelSelectEl.appendChild(option);
+  }
+  if (Game.isCustomLevel && Game.customLevel) {
     Game.levelSelectEl.value = Game.levels.length;
   } else {
     Game.levelSelectEl.value = Game.levelIndex;

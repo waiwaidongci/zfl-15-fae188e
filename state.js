@@ -222,24 +222,35 @@ Game.validateLevel = function(level, lines) {
 
   if (errors.filter(e => e.critical).length === 0 && start) {
     const reachResult = Game.checkReachability(lines, start);
+    const reachableTreesCount = trees - reachResult.unreachableTrees.length;
+    const reachableLeavesCount = leaves - reachResult.unreachableLeaves.length;
+
     if (level.winCondition.requiredTrees > 0) {
-      const unreachableTrees = reachResult.unreachableTrees;
-      if (unreachableTrees.length > 0) {
-        const count = unreachableTrees.length;
-        const samples = unreachableTrees.slice(0, 3).map(p => `(${p[0]},${p[1]})`).join("、");
+      if (reachableTreesCount < level.winCondition.requiredTrees) {
+        const count = reachResult.unreachableTrees.length;
+        const samples = reachResult.unreachableTrees.slice(0, 3).map(p => `(${p[0]},${p[1]})`).join("、");
         errors.push({
           critical: true,
-          msg: `有${count}处树根从起点不可达：${samples}${count > 3 ? "..." : ""}。检查是否被障碍完全包围`
+          msg: `可达树根(${reachableTreesCount})少于目标树根(${level.winCondition.requiredTrees})，有${count}处树根不可达：${samples}${count > 3 ? "..." : ""}`
+        });
+      } else if (reachResult.unreachableTrees.length > 0) {
+        infos.push({
+          msg: `地图中有${reachResult.unreachableTrees.length}处树根不可达，但数量足够完成目标`
         });
       }
     }
+
     if (level.winCondition.requiredLeaves > 0) {
-      const unreachableLeaves = reachResult.unreachableLeaves;
-      const neededLeaves = level.winCondition.requiredLeaves;
-      const reachableLeavesCount = leaves - unreachableLeaves.length;
-      if (reachableLeavesCount < neededLeaves) {
-        warnings.push({
-          msg: `可达落叶(${reachableLeavesCount})少于目标落叶(${neededLeaves})，可能无法完成目标`
+      if (reachableLeavesCount < level.winCondition.requiredLeaves) {
+        const count = reachResult.unreachableLeaves.length;
+        const samples = reachResult.unreachableLeaves.slice(0, 3).map(p => `(${p[0]},${p[1]})`).join("、");
+        errors.push({
+          critical: true,
+          msg: `可达落叶(${reachableLeavesCount})少于目标落叶(${level.winCondition.requiredLeaves})，有${count}片落叶不可达：${samples}${count > 3 ? "..." : ""}`
+        });
+      } else if (reachResult.unreachableLeaves.length > 0) {
+        infos.push({
+          msg: `地图中有${reachResult.unreachableLeaves.length}片落叶不可达，但数量足够完成目标`
         });
       }
     }
