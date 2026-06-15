@@ -77,9 +77,11 @@ Game.grow = function(cell) {
   const tileCost = Game.cost[cell.soil] + (cell.microbe && !cell.competed ? 3 : 0);
   if (Game.state.nutrients < tileCost) {
     Game.addLog("养分不足，前沿停止扩张。");
+    Game.announce("养分不足，无法扩张");
     return false;
   }
   Game.saveHistory();
+  const prevNutrients = Game.state.nutrients;
   cell.mycelium = true;
   Game.state.nutrients -= tileCost;
   if (cell.leaf && !cell.decomposed) {
@@ -95,6 +97,8 @@ Game.grow = function(cell) {
   } else {
     Game.addLog(`${cell.soil === "dry" ? "干层" : cell.soil === "wet" ? "湿土" : "壤土"}中新生菌丝。`);
   }
+  const delta = Game.state.nutrients - prevNutrients;
+  Game.announce(`扩张成功，养分${delta >= 0 ? "增加" : "减少"}${Math.abs(delta)}，当前${Game.state.nutrients}`);
   Game.render();
   return true;
 };
@@ -102,6 +106,7 @@ Game.grow = function(cell) {
 Game.nextTurn = function() {
   Game.saveHistory();
   Game.state.turn += 1;
+  const prevNutrients = Game.state.nutrients;
   let upkeep = Math.max(1, Math.floor(Game.state.cells.filter((cell) => cell.mycelium).length / 8));
   const treeLinks = Game.state.cells.filter((cell) => cell.mycelium && cell.tree).length;
   Game.state.nutrients += treeLinks * 2 - upkeep;
@@ -114,6 +119,8 @@ Game.nextTurn = function() {
   });
 
   Game.addLog(`维持消耗${upkeep}点，树根回馈${treeLinks * 2}点。`);
+  const delta = Game.state.nutrients - prevNutrients;
+  Game.announce(`进入第${Game.state.turn}回合，养分${delta >= 0 ? "增加" : "减少"}${Math.abs(delta)}，当前${Game.state.nutrients}`);
   Game.render();
 };
 
@@ -122,8 +129,10 @@ Game.reset = function() {
   Game.history = [];
   Game.selectedCell = null;
   Game.hoveredCell = null;
+  Game.focusedCell = null;
   Game.previewCell = null;
   Game.lastPreview = null;
   Game.hideGrowPreview();
+  Game.announce(`重置关卡：${Game.currentLevel().name}`);
   Game.render();
 };

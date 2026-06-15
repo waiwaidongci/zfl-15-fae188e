@@ -5,6 +5,7 @@ Game.state = null;
 Game.history = [];
 Game.selectedCell = null;
 Game.hoveredCell = null;
+Game.focusedCell = null;
 Game.previewCell = null;
 Game.lastPreview = null;
 Game.isRendering = false;

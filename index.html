@@ -8,13 +8,15 @@
   </head>
   <body>
     <main class="game">
+      <div id="srAnnounce" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+      <div id="srLog" class="sr-only" aria-live="polite" aria-atomic="false"></div>
       <section class="map-wrap">
         <header class="bar">
           <div>
             <p>Subsoil Network</p>
             <h1>地下菌丝网络</h1>
           </div>
-          <div class="resource">
+          <div class="resource" aria-live="polite" aria-atomic="true">
             <span>养分</span>
             <strong id="nutrients">34</strong>
           </div>
@@ -39,7 +41,7 @@
           <p id="levelGoal">连接所有树根，并保持养分不低于0。</p>
         </section>
 
-        <section class="stats">
+        <section class="stats" aria-live="polite">
           <dl>
             <div><dt>回合</dt><dd id="turn">1</dd></div>
             <div><dt>连接树根</dt><dd id="trees">0/0</dd></div>
@@ -84,9 +86,9 @@
           <div id="guideList" class="guide-list"></div>
         </section>
 
-        <section class="log">
+        <section class="log" aria-label="土壤记录">
           <h2>土壤记录</h2>
-          <ol id="log"></ol>
+          <ol id="log" aria-live="polite" aria-relevant="additions"></ol>
         </section>
       </aside>
     </main>
