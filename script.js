@@ -53,6 +53,7 @@ let selectedCell = null;
 let hoveredCell = null;
 let previewCell = null;
 let lastPreview = null;
+let isRendering = false;
 
 const mapEl = document.querySelector("#map");
 const logEl = document.querySelector("#log");
@@ -415,6 +416,7 @@ function hideGrowPreview() {
 }
 
 function render() {
+  isRendering = true;
   const level = currentLevel();
   const winCondition = level.winCondition;
   levelSelectEl.value = levelIndex;
@@ -438,13 +440,35 @@ function render() {
   document.querySelector("#leaves").textContent = `${leavesDone}/${winCondition.requiredLeaves}`;
   document.querySelector("#length").textContent = length;
 
+  const savedHovered = hoveredCell ? { x: hoveredCell.x, y: hoveredCell.y } : null;
+  const savedSelected = selectedCell ? { x: selectedCell.x, y: selectedCell.y } : null;
+  const hadPreview = previewCell !== null;
+
   mapEl.innerHTML = "";
+
+  if (savedHovered) {
+    const restored = cellAt(savedHovered.x, savedHovered.y);
+    if (restored) {
+      hoveredCell = restored;
+      previewCell = restored;
+      showTileInfo(restored);
+      showGrowPreview(restored);
+    }
+  } else if (savedSelected && hadPreview) {
+    const restored = cellAt(savedSelected.x, savedSelected.y);
+    if (restored) {
+      previewCell = restored;
+      showGrowPreview(restored);
+    }
+  }
+
   state.cells.forEach((cell) => {
     const button = document.createElement("button");
     button.className = tileClass(cell);
     button.type = "button";
     button.title = `${cell.soil} ${cell.x},${cell.y}`;
     button.addEventListener("mouseenter", () => {
+      if (isRendering) return;
       hoveredCell = cell;
       previewCell = cell;
       showTileInfo(cell);
@@ -452,6 +476,7 @@ function render() {
       render();
     });
     button.addEventListener("mouseleave", () => {
+      if (isRendering) return;
       hoveredCell = null;
       previewCell = null;
       hideGrowPreview();
@@ -475,6 +500,7 @@ function render() {
       }
     }, { passive: false });
     button.addEventListener("focus", () => {
+      if (isRendering) return;
       hoveredCell = cell;
       previewCell = cell;
       showTileInfo(cell);
@@ -482,6 +508,7 @@ function render() {
       render();
     });
     button.addEventListener("blur", () => {
+      if (isRendering) return;
       hoveredCell = null;
       previewCell = null;
       hideGrowPreview();
@@ -530,6 +557,8 @@ function render() {
     li.textContent = entry;
     logEl.appendChild(li);
   });
+
+  isRendering = false;
 }
 
 function addLogOnce(text) {
