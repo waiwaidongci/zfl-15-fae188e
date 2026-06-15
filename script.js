@@ -55,6 +55,26 @@ let previewCell = null;
 let lastPreview = null;
 let isRendering = false;
 
+function mulberry32Step(a) {
+  a = (a + 0x6d2b79f5) >>> 0;
+  let t = a;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  const result = ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  return { value: result, nextState: a };
+}
+
+function seedForLevel(index) {
+  return (1779033703 ^ Math.imul(index, 2654435761)) >>> 0;
+}
+
+function levelRng() {
+  if (!state || state._rngState === undefined) return Math.random();
+  const step = mulberry32Step(state._rngState);
+  state._rngState = step.nextState;
+  return step.value;
+}
+
 const mapEl = document.querySelector("#map");
 const logEl = document.querySelector("#log");
 const levelSelectEl = document.querySelector("#levelSelect");
@@ -93,7 +113,8 @@ function parseLevel(level) {
     turn: 1,
     nutrients: level.nutrients,
     cells,
-    log: ["菌核开始伸展。"]
+    log: ["菌核开始伸展。"],
+    _rngState: seedForLevel(levelIndex)
   };
 }
 
@@ -223,7 +244,7 @@ function nextTurn() {
   state.nutrients += treeLinks * 2 - upkeep;
 
   state.cells.forEach((cell) => {
-    if (cell.microbe && !cell.mycelium && Math.random() < 0.18) {
+    if (cell.microbe && !cell.mycelium && levelRng() < 0.18) {
       const target = neighbors(cell).find((item) => !item.mycelium && !item.tree && !item.leaf);
       if (target) target.microbe = true;
     }
