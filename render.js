@@ -449,7 +449,9 @@ Game.render = function() {
   Game.isRendering = true;
   const level = Game.currentLevel();
   const winCondition = level.winCondition;
-  Game.levelSelectEl.value = Game.levelIndex;
+  Game.levelSelectEl.value = Game.isCustomLevel && Game.customLevel
+    ? Game.levels.length
+    : Game.levelIndex;
   document.querySelector("#levelGoal").textContent = level.goal;
 
   const nutrientEl = document.querySelector("#nutrients");
@@ -656,27 +658,29 @@ Game.editorClearMap = function() {
 };
 
 Game.editorCollectFormData = function() {
+  const parseBoundedNumber = function(selector, fallback, min, max) {
+    const value = parseInt(document.querySelector(selector).value, 10);
+    if (Number.isNaN(value)) return fallback;
+    return Math.max(min, Math.min(max, value));
+  };
+  const parseStartCoord = function(selector) {
+    const raw = document.querySelector(selector).value.trim();
+    if (raw === "") return null;
+    const value = parseInt(raw, 10);
+    if (Number.isNaN(value)) return null;
+    return value;
+  };
   return {
     name: document.querySelector("#editorName").value.trim(),
     goal: document.querySelector("#editorGoal").value.trim(),
-    nutrients: Math.max(1, Math.min(200,
-      parseInt(document.querySelector("#editorNutrients").value, 10) || 30
-    )),
+    nutrients: parseBoundedNumber("#editorNutrients", 30, 1, 200),
     start: [
-      Math.max(0, Math.min(9,
-        parseInt(document.querySelector("#editorStartX").value, 10) || 0
-      )),
-      Math.max(0, Math.min(9,
-        parseInt(document.querySelector("#editorStartY").value, 10) || 0
-      ))
+      parseStartCoord("#editorStartX"),
+      parseStartCoord("#editorStartY")
     ],
     winCondition: {
-      requiredTrees: Math.max(0, Math.min(20,
-        parseInt(document.querySelector("#editorTrees").value, 10) || 0
-      )),
-      requiredLeaves: Math.max(0, Math.min(20,
-        parseInt(document.querySelector("#editorLeaves").value, 10) || 0
-      ))
+      requiredTrees: parseBoundedNumber("#editorTrees", 0, 0, 20),
+      requiredLeaves: parseBoundedNumber("#editorLeaves", 0, 0, 20)
     }
   };
 };

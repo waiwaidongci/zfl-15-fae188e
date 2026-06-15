@@ -172,6 +172,8 @@ Game.validateLevel = function(level, lines) {
 
   const start = startFromMap || level.start;
   if (!start || start.length !== 2 ||
+      !Number.isInteger(start[0]) ||
+      !Number.isInteger(start[1]) ||
       start[0] < 0 || start[0] > 9 ||
       start[1] < 0 || start[1] > 9) {
     errors.push({
