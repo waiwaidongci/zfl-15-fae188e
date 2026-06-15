@@ -6,6 +6,7 @@ Game.cacheDom = function() {
   Game.levelSelectEl = document.querySelector("#levelSelect");
   Game.srAnnounceEl = document.querySelector("#srAnnounce");
   Game.srLogEl = document.querySelector("#srLog");
+  Game._tileButtons = null;
 };
 
 Game.renderLevelOptions = function() {
@@ -17,6 +18,146 @@ Game.renderLevelOptions = function() {
     Game.levelSelectEl.appendChild(option);
   });
   Game.levelSelectEl.value = Game.levelIndex;
+};
+
+Game.ensureMapDom = function() {
+  if (Game._tileButtons) return;
+  Game._tileButtons = [];
+  Game.mapEl.innerHTML = "";
+
+  for (let y = 0; y < 10; y += 1) {
+    const row = [];
+    for (let x = 0; x < 10; x += 1) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.x = x;
+      button.dataset.y = y;
+      button.className = "cell";
+
+      button.addEventListener("keydown", (e) => {
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter", " "].includes(e.key)) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        if (e.key === "ArrowUp") Game.moveFocus(0, -1);
+        else if (e.key === "ArrowDown") Game.moveFocus(0, 1);
+        else if (e.key === "ArrowLeft") Game.moveFocus(-1, 0);
+        else if (e.key === "ArrowRight") Game.moveFocus(1, 0);
+        else if (e.key === "Enter" || e.key === " ") Game.activateFocused();
+      });
+
+      button.addEventListener("mouseenter", () => {
+        if (Game.isRendering) return;
+        const bx = parseInt(button.dataset.x, 10);
+        const by = parseInt(button.dataset.y, 10);
+        const cell = Game.cellAt(bx, by);
+        if (!cell) return;
+        Game.hoveredCell = cell;
+        Game.previewCell = cell;
+        Game.focusedCell = cell;
+        Game.showTileInfo(cell);
+        Game.showGrowPreview(cell);
+        Game.render();
+      });
+
+      button.addEventListener("mouseleave", () => {
+        if (Game.isRendering) return;
+        Game.hoveredCell = null;
+        Game.previewCell = null;
+        Game.hideGrowPreview();
+        Game.showTileInfo(Game.selectedCell || Game.focusedCell);
+        Game.render();
+      });
+
+      button.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        const bx = parseInt(button.dataset.x, 10);
+        const by = parseInt(button.dataset.y, 10);
+        const cell = Game.cellAt(bx, by);
+        if (!cell) return;
+        if (Game.previewCell && Game.previewCell.x === cell.x && Game.previewCell.y === cell.y) {
+          Game.selectedCell = cell;
+          Game.focusedCell = cell;
+          Game.hideGrowPreview();
+          Game.previewCell = null;
+          if (!Game.grow(cell)) Game.render();
+        } else {
+          Game.hoveredCell = cell;
+          Game.previewCell = cell;
+          Game.selectedCell = cell;
+          Game.focusedCell = cell;
+          Game.showTileInfo(cell);
+          Game.showGrowPreview(cell);
+          Game.render();
+        }
+      }, { passive: false });
+
+      button.addEventListener("focus", () => {
+        if (Game.isRendering) return;
+        const bx = parseInt(button.dataset.x, 10);
+        const by = parseInt(button.dataset.y, 10);
+        const cell = Game.cellAt(bx, by);
+        if (!cell) return;
+        if (Game.focusedCell && Game.focusedCell.x === bx && Game.focusedCell.y === by) return;
+        Game.focusedCell = cell;
+        Game.hoveredCell = cell;
+        Game.previewCell = cell;
+        Game.showTileInfo(cell);
+        Game.showGrowPreview(cell);
+        Game.render();
+      });
+
+      button.addEventListener("blur", () => {
+        if (Game.isRendering) return;
+        setTimeout(() => {
+          const stillInMap = document.activeElement &&
+            document.activeElement.closest &&
+            document.activeElement.closest("#map") !== null;
+          if (stillInMap) return;
+          Game.hoveredCell = null;
+          Game.previewCell = null;
+          Game.hideGrowPreview();
+          Game.showTileInfo(Game.selectedCell);
+          Game.render();
+        }, 0);
+      });
+
+      button.addEventListener("click", () => {
+        const bx = parseInt(button.dataset.x, 10);
+        const by = parseInt(button.dataset.y, 10);
+        const cell = Game.cellAt(bx, by);
+        if (!cell) return;
+        Game.selectedCell = cell;
+        Game.focusedCell = cell;
+        Game.hideGrowPreview();
+        Game.previewCell = null;
+        if (!Game.grow(cell)) Game.render();
+      });
+
+      Game.mapEl.appendChild(button);
+      row.push(button);
+    }
+    Game._tileButtons.push(row);
+  }
+};
+
+Game.updateTileDom = function(cell) {
+  if (!Game._tileButtons || !Game._tileButtons[cell.y]) return;
+  const button = Game._tileButtons[cell.y][cell.x];
+  if (!button) return;
+  button.className = Game.tileClass(cell);
+  button.title = `${cell.soil} ${cell.x},${cell.y}`;
+  button.setAttribute("aria-label", Game.buildTileLabel(cell));
+  if (cell.block) {
+    button.setAttribute("aria-disabled", "true");
+  } else {
+    button.removeAttribute("aria-disabled");
+  }
+  if (cell.mycelium) {
+    button.setAttribute("aria-pressed", "true");
+  } else {
+    button.removeAttribute("aria-pressed");
+  }
 };
 
 Game.announce = function(text) {
@@ -63,13 +204,10 @@ Game.buildTileLabel = function(cell) {
 };
 
 Game.moveFocus = function(dx, dy) {
-  const current = Game.focusedCell || Game.selectedCell || Game.cellAt(
-    Game.currentLevel().start[0],
-    Game.currentLevel().start[1]
-  );
-  if (!current) return;
-  const newX = current.x + dx;
-  const newY = current.y + dy;
+  const startCell = Game._getFocusStartCell();
+  if (!startCell) return;
+  const newX = startCell.x + dx;
+  const newY = startCell.y + dy;
   if (newX < 0 || newX >= 10 || newY < 0 || newY >= 10) return;
   const target = Game.cellAt(newX, newY);
   if (!target) return;
@@ -79,9 +217,25 @@ Game.moveFocus = function(dx, dy) {
   Game.showTileInfo(target);
   Game.showGrowPreview(target);
   Game.render();
-  const btn = Game.mapEl.querySelector(`[data-x="${newX}"][data-y="${newY}"]`);
-  if (btn) btn.focus({ preventScroll: true });
+  const btn = Game._tileButtons && Game._tileButtons[newY] && Game._tileButtons[newY][newX];
+  if (btn && document.activeElement !== btn) {
+    btn.focus({ preventScroll: true });
+  }
   Game.announce(Game.buildTileLabel(target));
+};
+
+Game._getFocusStartCell = function() {
+  if (Game.focusedCell) return Game.focusedCell;
+  if (Game.selectedCell) return Game.selectedCell;
+  const activeEl = document.activeElement;
+  if (activeEl && activeEl.closest && activeEl.closest("#map")) {
+    const bx = parseInt(activeEl.getAttribute("data-x"), 10);
+    const by = parseInt(activeEl.getAttribute("data-y"), 10);
+    const cell = Game.cellAt(bx, by);
+    if (cell) return cell;
+  }
+  const start = Game.currentLevel().start;
+  return Game.cellAt(start[0], start[1]);
 };
 
 Game.activateFocused = function() {
@@ -303,114 +457,12 @@ Game.render = function() {
   document.querySelector("#leaves").textContent = `${leavesDone}/${winCondition.requiredLeaves}`;
   document.querySelector("#length").textContent = length;
 
-  const savedHovered = Game.hoveredCell ? { x: Game.hoveredCell.x, y: Game.hoveredCell.y } : null;
-  const savedSelected = Game.selectedCell ? { x: Game.selectedCell.x, y: Game.selectedCell.y } : null;
-  const savedFocused = Game.focusedCell ? { x: Game.focusedCell.x, y: Game.focusedCell.y } : null;
-  const hadPreview = Game.previewCell !== null;
+  Game.ensureMapDom();
+
   const prevLogLength = Game.state ? Game.state._lastLogLen || 0 : 0;
 
-  Game.mapEl.innerHTML = "";
-
-  if (savedHovered) {
-    const restored = Game.cellAt(savedHovered.x, savedHovered.y);
-    if (restored) {
-      Game.hoveredCell = restored;
-      Game.previewCell = restored;
-      Game.showTileInfo(restored);
-      Game.showGrowPreview(restored);
-    }
-  } else if (savedSelected && hadPreview) {
-    const restored = Game.cellAt(savedSelected.x, savedSelected.y);
-    if (restored) {
-      Game.previewCell = restored;
-      Game.showGrowPreview(restored);
-    }
-  }
-
   Game.state.cells.forEach((cell) => {
-    const button = document.createElement("button");
-    button.className = Game.tileClass(cell);
-    button.type = "button";
-    button.dataset.x = cell.x;
-    button.dataset.y = cell.y;
-    button.title = `${cell.soil} ${cell.x},${cell.y}`;
-    button.setAttribute("aria-label", Game.buildTileLabel(cell));
-    if (cell.block) {
-      button.setAttribute("aria-disabled", "true");
-    }
-    if (cell.mycelium) {
-      button.setAttribute("aria-pressed", "true");
-    }
-    button.addEventListener("keydown", (e) => {
-      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter", " "].includes(e.key)) {
-        e.preventDefault();
-      }
-      if (e.key === "ArrowUp") Game.moveFocus(0, -1);
-      else if (e.key === "ArrowDown") Game.moveFocus(0, 1);
-      else if (e.key === "ArrowLeft") Game.moveFocus(-1, 0);
-      else if (e.key === "ArrowRight") Game.moveFocus(1, 0);
-      else if (e.key === "Enter" || e.key === " ") Game.activateFocused();
-    });
-    button.addEventListener("mouseenter", () => {
-      if (Game.isRendering) return;
-      Game.hoveredCell = cell;
-      Game.previewCell = cell;
-      Game.focusedCell = cell;
-      Game.showTileInfo(cell);
-      Game.showGrowPreview(cell);
-      Game.render();
-    });
-    button.addEventListener("mouseleave", () => {
-      if (Game.isRendering) return;
-      Game.hoveredCell = null;
-      Game.previewCell = null;
-      Game.hideGrowPreview();
-      Game.showTileInfo(Game.selectedCell || Game.focusedCell);
-      Game.render();
-    });
-    button.addEventListener("touchstart", (e) => {
-      e.preventDefault();
-      if (Game.previewCell && Game.previewCell.x === cell.x && Game.previewCell.y === cell.y) {
-        Game.selectedCell = cell;
-        Game.focusedCell = cell;
-        Game.hideGrowPreview();
-        Game.previewCell = null;
-        if (!Game.grow(cell)) Game.render();
-      } else {
-        Game.hoveredCell = cell;
-        Game.previewCell = cell;
-        Game.selectedCell = cell;
-        Game.focusedCell = cell;
-        Game.showTileInfo(cell);
-        Game.showGrowPreview(cell);
-        Game.render();
-      }
-    }, { passive: false });
-    button.addEventListener("focus", () => {
-      if (Game.isRendering) return;
-      Game.focusedCell = cell;
-      Game.hoveredCell = cell;
-      Game.previewCell = cell;
-      Game.showTileInfo(cell);
-      Game.showGrowPreview(cell);
-      Game.render();
-    });
-    button.addEventListener("blur", () => {
-      if (Game.isRendering) return;
-      Game.hoveredCell = null;
-      Game.previewCell = null;
-      Game.hideGrowPreview();
-      Game.showTileInfo(Game.selectedCell);
-      Game.render();
-    });
-    button.addEventListener("click", () => {
-      Game.selectedCell = cell;
-      Game.focusedCell = cell;
-      Game.hideGrowPreview();
-      Game.previewCell = null;
-      if (!Game.grow(cell)) Game.render();
-    });
-    Game.mapEl.appendChild(button);
+    Game.updateTileDom(cell);
   });
 
   if (Game.hoveredCell) {
@@ -446,17 +498,6 @@ Game.render = function() {
     li.textContent = entry;
     Game.logEl.appendChild(li);
   });
-
-  if (savedFocused) {
-    const currentFocused = Game.cellAt(savedFocused.x, savedFocused.y);
-    if (currentFocused) {
-      Game.focusedCell = currentFocused;
-    }
-  }
-  if (Game.focusedCell) {
-    const btn = Game.mapEl.querySelector(`[data-x="${Game.focusedCell.x}"][data-y="${Game.focusedCell.y}"]`);
-    if (btn) setTimeout(() => btn.focus({ preventScroll: true }), 0);
-  }
 
   const currentLogLen = Game.state.log.length;
   if (currentLogLen > prevLogLength) {
